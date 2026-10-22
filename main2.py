@@ -106,9 +106,13 @@ def generate_local_reply(message, previous_turns):
         for user, assistant in previous_turns
     ) + f"{message}{eos}"
     input_ids = tokenizer.encode(context, return_tensors="pt")[:, -600:]
+    # Explicit attention mask is needed because DialoGPT uses EOS as its pad token.
+    # The input is unpadded, so every provided token is part of the context.
+    attention_mask = torch.ones_like(input_ids)
     with torch.inference_mode():
         result = model.generate(
             input_ids,
+            attention_mask=attention_mask,
             max_new_tokens=70,
             do_sample=True,
             top_p=0.85,
