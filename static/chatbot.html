@@ -54,7 +54,7 @@
       localStorage.setItem('user_id', userId);
     }
 
-    function addMessage(sender, text, sentimentScore) {
+    function addMessage(sender, text, sentimentScore, modelUsed) {
       const div = document.createElement('div');
       div.className = 'message ' + sender;
       const label = document.createElement('b');
@@ -64,6 +64,11 @@
       if (typeof sentimentScore === 'number') {
         const note = document.createElement('small');
         note.textContent = ' (Sentiment: ' + sentimentScore.toFixed(2) + ')';
+        div.appendChild(note);
+      }
+      if (sender === 'bot' && modelUsed === 'dialogpt_fallback') {
+        const note = document.createElement('small');
+        note.textContent = ' (Offline DialoGPT fallback: responses may be unreliable)';
         div.appendChild(note);
       }
       chatMessages.appendChild(div);
@@ -83,7 +88,7 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Chat request failed');
-        addMessage('bot', data.reply, data.sentiment_score);
+        addMessage('bot', data.reply, data.sentiment_score, data.model_used);
         loadAdminStats();
       } catch (error) {
         addMessage('bot', 'Unable to send message: ' + error.message);

@@ -42,3 +42,34 @@ def test_legacy_table_migration(tmp_path, monkeypatch):
         ).fetchone()
         assert old_score == 4.2
         assert new_score is None
+
+
+def test_dialogpt_fallback_when_no_gemini_key(monkeypatch):
+    import asyncio
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ENABLE_DIALOGPT_FALLBACK", "true")
+    monkeypatch.setattr(
+        main2, "generate_local_reply",
+        lambda message, previous: "A local demo answer."
+    )
+    reply, source = asyncio.run(main2.generate_reply("How was your day?", []))
+    assert source == "dialogpt_fallback"
+    assert reply == "A local demo answer."
+
+
+def test_safe_message_before_fallback(monkeypatch):
+    import asyncio
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ENABLE_DIALOGPT_FALLBACK", "true")
+    reply, source = asyncio.run(main2.generate_reply("I want to die", []))
+    assert source == "safety_message"
+    assert "emergency" in reply.lower()
+
+
+def test_no_fallback_if_user_disables_it(monkeypatch):
+    import asyncio
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.setenv("ENABLE_DIALOGPT_FALLBACK", "false")
+    reply, source = asyncio.run(main2.generate_reply("Hello", []))
+    assert source == "unavailable"
+    assert "disabled" in reply.lower()

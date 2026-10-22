@@ -3,6 +3,7 @@
 Sentiment analysis is lexicon-based NLP, not depression prediction.
 """
 import logging
+from functools import lru_cache
 import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -13,6 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -67,60 +69,125 @@ CRISIS_REPLY = (
 
 
 def recent_chat_context(user_id):
-    """Use up to three earlier Gemini chat turns for coherent follow-ups."""
+    """Use up to three previous conversational turns for context."""
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute("""
             SELECT message, reply FROM messages
-            WHERE user_id = ? AND model_used = 'gemini'
+            WHERE user_id = ? AND model_used IN ('gemini', 'dialogpt_fallback')
             ORDER BY id DESC LIMIT 3
         """, (user_id,)).fetchall()
     return list(reversed(rows))
 
 
+@lru_cache(maxsize=1)
+def get_local_dialogpt():
+    """Load the model only if Gemini fails; cache it for later replies.
+
+    The first use downloads weights unless they are already cached.
+    """
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    model_name = "microsoft/DialoGPT-small"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForCausalLM.from_pretrained(model_name)
+    model.eval()
+    return tokenizer, model
+
+
+def generate_local_reply(message, previous_turns):
+    """Pretrained DialoGPT inference; no fine-tuning or clinical guarantees."""
+    import torch
+
+    tokenizer, model = get_local_dialogpt()
+    eos = tokenizer.eos_token
+    # Build a little dialogue context from the last few stored turns.
+    context = "".join(
+        f"{user}{eos}{assistant}{eos}"
+        for user, assistant in previous_turns
+    ) + f"{message}{eos}"
+    input_ids = tokenizer.encode(context, return_tensors="pt")[:, -600:]
+    with torch.inference_mode():
+        result = model.generate(
+            input_ids,
+            max_new_tokens=70,
+            do_sample=True,
+            top_p=0.85,
+            temperature=0.7,
+            no_repeat_ngram_size=3,
+            pad_token_id=tokenizer.eos_token_id,
+        )
+    response_ids = result[0, input_ids.shape[-1]:]
+    return tokenizer.decode(response_ids, skip_special_tokens=True).strip()
+
+
+async def local_fallback(message, previous_turns):
+    """Return an explicitly labelled offline response, or clear failure."""
+    enabled = os.getenv("ENABLE_DIALOGPT_FALLBACK", "true").strip().lower()
+    if enabled in ("false", "0", "no", "off"):
+        return (
+            "Gemini is unavailable. Local DialoGPT fallback is disabled.",
+            "unavailable",
+        )
+    try:
+        # Model inference can be slow on a laptop; don't block FastAPI's event loop.
+        reply = await run_in_threadpool(
+            generate_local_reply, message, previous_turns
+        )
+        if reply:
+            return reply, "dialogpt_fallback"
+    except Exception:
+        logger.exception(
+            "DialoGPT fallback failed. Install requirements-local.txt "
+            "and download model weights while online."
+        )
+    return (
+        "Neither Gemini nor the local DialoGPT model is available right now. "
+        "Check the terminal for details.",
+        "unavailable",
+    )
+
+
 async def generate_reply(message, previous_turns):
-    """Use Gemini; do not silently fall back to unreliable DialoGPT replies."""
+    """Gemini first, then optional local DialoGPT when Gemini cannot respond."""
     if any(phrase in message.casefold() for phrase in CRISIS_PHRASES):
         return CRISIS_REPLY, "safety_message"
 
     api_key = os.getenv("GEMINI_API_KEY")
-    if not api_key:
-        return "Gemini is not configured. Set GEMINI_API_KEY in .env.", "unavailable"
-
-    try:
-        from google import genai
-        from google.genai import types
-        client = genai.Client(api_key=api_key)
-        history = "".join(
-            f"User: {user}\nAssistant: {assistant}\n"
-            for user, assistant in previous_turns
-        )
-        prompt = (
-            "Previous conversation (if any):\n" + history
-            + "\nLatest user message:\n" + message
-        )
-        response = await client.aio.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                system_instruction=(
-                    "You are a supportive, non-clinical chatbot for a student demo. "
-                    "Reply naturally and briefly to the latest user message. "
-                    "Use previous messages only for context. Do not diagnose depression, "
-                    "give medical advice, or describe sentiment as a health assessment. "
-                    "For immediate danger, encourage emergency or trusted-person help."
+    if api_key:
+        try:
+            from google import genai
+            from google.genai import types
+            client = genai.Client(api_key=api_key)
+            history = "".join(
+                f"User: {user}\nAssistant: {assistant}\n"
+                for user, assistant in previous_turns
+            )
+            prompt = (
+                "Previous conversation (if any):\n" + history
+                + "\nLatest user message:\n" + message
+            )
+            response = await client.aio.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    system_instruction=(
+                        "You are a supportive, non-clinical chatbot for a student demo. "
+                        "Reply naturally and briefly to the latest user message. "
+                        "Use previous messages only for context. Do not diagnose depression, "
+                        "give medical advice, or describe sentiment as a health assessment. "
+                        "For immediate danger, encourage emergency or trusted-person help."
+                    ),
                 ),
-            ),
-        )
-        if response.text and response.text.strip():
-            return response.text.strip(), "gemini"
-        raise RuntimeError("Gemini returned an empty response")
-    except Exception:
-        logger.exception("Gemini request failed (check key, model and quota)")
-        return (
-            "Gemini is temporarily unavailable. Check your API key, model, quota and terminal log.",
-            "unavailable",
-        )
+            )
+            if response.text and response.text.strip():
+                return response.text.strip(), "gemini"
+            raise RuntimeError("Gemini returned an empty response")
+        except Exception:
+            logger.exception("Gemini request failed. Trying local DialoGPT.")
+    else:
+        logger.info("No Gemini key found; using local fallback if available.")
 
+    return await local_fallback(message, previous_turns)
 
 @app.post("/chat")
 async def chat(chat_request: ChatRequest):
