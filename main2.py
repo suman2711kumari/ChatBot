@@ -1,361 +1,186 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, FileResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+"""Simple FastAPI chatbot: VADER sentiment, Gemini replies and SQLite dashboard.
+
+Sentiment analysis is lexicon-based NLP, not depression prediction.
+"""
+import logging
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
-import os
-import json
-import re
-import nltk
-from nltk.stem import WordNetLemmatizer
-from nltk.corpus import wordnet
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
-import google.generativeai as genai
+from pathlib import Path
+
 from dotenv import load_dotenv
-load_dotenv()
-# Configure Gemini API
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=GEMINI_API_KEY)
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
-
-for model in genai.list_models():
-    print(model.name)
-
-print("Listing available models...\n")
-
-for model in genai.list_models():
-    print(model.name, model.supported_generation_methods)
+BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
+DB_PATH = BASE_DIR / "chatbot.db"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+logger = logging.getLogger(__name__)
 
 app = FastAPI()
-
-from fastapi.middleware.cors import CORSMiddleware
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # frontend origin
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+analyzer = SentimentIntensityAnalyzer()
 
 
-# Initialize Gemini model
-try:
-    gemini_model = genai.GenerativeModel('gemini-3.6-flash')
-    print("Gemini model initialized successfully")
-except Exception as e:
-    print(f"Error initializing Gemini: {e}")
-    gemini_model = None
-
-# Load local models
-tokenizer = AutoTokenizer.from_pretrained("microsoft/DialoGPT-small")
-model = AutoModelForCausalLM.from_pretrained("microsoft/DialoGPT-small")
-
-# Serve static files (your frontend) from 'static' folder
-#app.mount("/static", StaticFiles(directory="chatbot/static"), name="static")
-app.mount("/static", StaticFiles(directory="static"), name="static")
-
-# Load merged lexicon once at startup
-try:
-    with open('merged_nrc_lexicon.json', 'r', encoding='utf-8') as f:
-        merged_lexicon = json.load(f)
-except FileNotFoundError:
-    print("Warning: merged_nrc_lexicon.json not found. Emotion detection will be limited.")
-    merged_lexicon = {}
-
-# Initialize DB
 def init_db():
-    conn = sqlite3.connect('chatbot.db')
-    c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id TEXT,
-            message TEXT,
-            reply TEXT,
-            depression_score REAL,
-            model_used TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    ''')
-    conn.commit()
-    conn.close()
+    """Create database or add sentiment columns without deleting old records."""
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id TEXT,
+                message TEXT,
+                reply TEXT,
+                sentiment_score REAL,
+                model_used TEXT,
+                timestamp TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        columns = {column[1] for column in conn.execute("PRAGMA table_info(messages)")}
+        for name, type_ in (("sentiment_score", "REAL"), ("model_used", "TEXT")):
+            if name not in columns:
+                conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {type_}")
+
 
 init_db()
 
-# Define which emotions you consider related to depression
-DEPRESSION_EMOTIONS = {'sadness', 'fear', 'anger', 'disgust'}
-
-emotion_reply_map = {
-    'sad': "I'm sorry to hear you're feeling sad. Would you like to talk more about it?",
-    'depressed': "It sounds like you're going through a tough time. Remember, you're not alone.",
-    'anxious': "Anxiety can be overwhelming. Try to take deep breaths and focus on the present moment.",
-    'lonely': "Feeling lonely is hard. I'm here to listen whenever you want to share.",
-    'suicidal': "I'm really concerned about your safety. Please consider reaching out to a mental health professional or a trusted person.",
-    'default': "Thank you for sharing. Can you tell me more about how you're feeling?",
-    'sadness': "I'm sorry to hear you're feeling sad. Would you like to talk more about it?",
-    'fear': "It sounds like you're worried. I'm here to listen.",
-    'anger': "I understand you're upset. Let's talk about it.",
-    'disgust': "That sounds difficult. I'm here for you.",
-}
-
-CRITICAL_PHRASES = [
-    "i want to die",
-    "i want to kill myself",
-    "i am going to hurt myself",
-    "i can't go on",
-    "i feel hopeless",
-]
-
-HELPLINE_MESSAGE = (
-    "I'm really sorry you're feeling this way. "
-    "Please consider reaching out to a mental health professional or helpline immediately. "
-    "You are not alone."
-)
-
-# Download NLTK data
-try:
-    nltk.download('wordnet', quiet=True)
-    nltk.download('omw-1.4', quiet=True)
-except:
-    pass
-
-lemmatizer = WordNetLemmatizer()
-
-def lemmatize_word(word):
-    return lemmatizer.lemmatize(word)
-
-def detect_dominant_emotion(text: str) -> str:
-    if not merged_lexicon:
-        return None
-    
-    words = re.findall(r'\b\w+\b', text.lower())
-    emotion_scores = {}
-    for word in words:
-        if word in merged_lexicon:
-            for emotion, weight in merged_lexicon[word].items():
-                emotion_scores[emotion] = emotion_scores.get(emotion, 0) + weight
-    if not emotion_scores:
-        return None
-    return max(emotion_scores, key=emotion_scores.get)
-
-analyzer = SentimentIntensityAnalyzer()
-
-def calculate_depression_score(text: str) -> float:
-    text_lower = text.lower()
-    words = re.findall(r'\b\w+\b', text_lower)
-    score = 0.0
-
-    for word in words:
-        lemma = lemmatize_word(word)
-        if lemma in merged_lexicon:
-            emotions = merged_lexicon[lemma]
-            for emotion, weight in emotions.items():
-                if emotion in DEPRESSION_EMOTIONS:
-                    score += weight
-
-    sentiment = analyzer.polarity_scores(text)
-    if sentiment['compound'] < -0.3:
-        score += abs(sentiment['compound']) * 5
-
-    return score
-
-def check_critical_message(message: str) -> bool:
-    msg_lower = message.lower()
-    return any(phrase in msg_lower for phrase in CRITICAL_PHRASES)
-
-def should_use_gemini(user_message: str) -> bool:
-    """
-    Always use Gemini for all non-rule-based responses
-    """
-    return True
-
-async def generate_gemini_reply(user_message: str, user_id: str) -> tuple[str, str]:
-    """
-    Generate reply using Gemini API
-    Returns (reply, model_used)
-    """
-    if not gemini_model:
-        return "I'm having trouble accessing my knowledge base right now. Please try again later.", "gemini_error"
-    
-    try:
-        # Create a prompt that maintains the supportive chatbot character
-        prompt = f"""You are a supportive and empathetic chatbot designed to help people with their questions and concerns. 
-        Please respond to the following message in a helpful, caring, and informative way. 
-        Keep your response concise but thorough, and maintain a warm, supportive tone.
-
-        User message: {user_message}
-
-        Response:"""
-        
-        response = gemini_model.generate_content(prompt)
-        return response.text.strip(), "gemini"
-    except Exception as e:
-        print(f"Gemini API error: {e}")
-        # Fallback to local model
-        return generate_local_llm_reply(user_id, user_message), "dialogpt_fallback"
-
-chat_histories = {}
-
-def generate_local_llm_reply(user_id: str, user_message: str) -> str:
-    """
-    Generate reply using local DialoGPT model
-    """
-    global chat_histories
-    try:
-        input_ids = tokenizer.encode(user_message + tokenizer.eos_token, return_tensors='pt')
-        if user_id in chat_histories:
-            bot_input_ids = torch.cat([chat_histories[user_id], input_ids], dim=-1)
-        else:
-            bot_input_ids = input_ids
-        
-        chat_histories[user_id] = model.generate(
-            bot_input_ids, 
-            max_length=1000, 
-            pad_token_id=tokenizer.eos_token_id,
-            do_sample=True,
-            temperature=0.7,
-            top_p=0.9
-        )
-        reply = tokenizer.decode(chat_histories[user_id][:, bot_input_ids.shape[-1]:][0], skip_special_tokens=True)
-        return reply.strip() if reply.strip() else "I understand. Can you tell me more?"
-    except Exception as e:
-        print(f"Local model error: {e}")
-        return "I'm here to listen. Can you tell me more about what's on your mind?"
-
-async def generate_reply(user_id, text):
-
-    print("Entered generate_reply")
-
-    if check_critical_message(text):
-        print("Critical response")
-        return HELPLINE_MESSAGE, "crisis_response"
-
-    dominant_emotion = detect_dominant_emotion(text)
-    print("Dominant emotion:", dominant_emotion)
-
-    if dominant_emotion and dominant_emotion in emotion_reply_map:
-        print("Emotion template")
-        return emotion_reply_map[dominant_emotion], "emotion_template"
-
-    print("Calling Gemini...")
-    return await generate_gemini_reply(text, user_id)
 
 class ChatRequest(BaseModel):
-    user_id: str
-    message: str
+    user_id: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=2000)
+
+
+# Minimal emergency backstop; it cannot reliably detect every crisis.
+CRISIS_PHRASES = (
+    "i want to kill myself", "i am going to kill myself", "i want to die",
+    "i'm going to hurt myself", "i am going to hurt myself", "end my life",
+)
+CRISIS_REPLY = (
+    "I'm sorry you're going through this. If you might hurt yourself, "
+    "please contact local emergency services or a trusted person right now. "
+    "A qualified mental-health professional can also help."
+)
+
+
+def recent_chat_context(user_id):
+    """Use up to three earlier Gemini chat turns for coherent follow-ups."""
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute("""
+            SELECT message, reply FROM messages
+            WHERE user_id = ? AND model_used = 'gemini'
+            ORDER BY id DESC LIMIT 3
+        """, (user_id,)).fetchall()
+    return list(reversed(rows))
+
+
+async def generate_reply(message, previous_turns):
+    """Use Gemini; do not silently fall back to unreliable DialoGPT replies."""
+    if any(phrase in message.casefold() for phrase in CRISIS_PHRASES):
+        return CRISIS_REPLY, "safety_message"
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return "Gemini is not configured. Set GEMINI_API_KEY in .env.", "unavailable"
+
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        history = "".join(
+            f"User: {user}\nAssistant: {assistant}\n"
+            for user, assistant in previous_turns
+        )
+        prompt = (
+            "Previous conversation (if any):\n" + history
+            + "\nLatest user message:\n" + message
+        )
+        response = await client.aio.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "You are a supportive, non-clinical chatbot for a student demo. "
+                    "Reply naturally and briefly to the latest user message. "
+                    "Use previous messages only for context. Do not diagnose depression, "
+                    "give medical advice, or describe sentiment as a health assessment. "
+                    "For immediate danger, encourage emergency or trusted-person help."
+                ),
+            ),
+        )
+        if response.text and response.text.strip():
+            return response.text.strip(), "gemini"
+        raise RuntimeError("Gemini returned an empty response")
+    except Exception:
+        logger.exception("Gemini request failed (check key, model and quota)")
+        return (
+            "Gemini is temporarily unavailable. Check your API key, model, quota and terminal log.",
+            "unavailable",
+        )
+
 
 @app.post("/chat")
-async def chat_endpoint(chat_req: ChatRequest):
-    user_id = chat_req.user_id
-    message = chat_req.message
+async def chat(chat_request: ChatRequest):
+    message = chat_request.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="Message cannot be blank")
 
-    if not user_id or not message:
-        return JSONResponse(status_code=400, content={"error": "user_id and message required"})
+    # Compound sentiment is in [-1, 1]. It is NOT a depression score.
+    sentiment_score = analyzer.polarity_scores(message)["compound"]
+    previous_turns = recent_chat_context(chat_request.user_id)
+    reply, model_used = await generate_reply(message, previous_turns)
 
-    depression_score = calculate_depression_score(message)
-    reply, model_used = await generate_reply(user_id, message)
-
-    # Store in database with model information
-    conn = sqlite3.connect('chatbot.db')
-    c = conn.cursor()
-    c.execute('''
-        INSERT INTO messages (user_id, message, reply, depression_score, model_used, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_id, message, reply, depression_score, model_used, datetime.now(timezone.utc).isoformat()))
-    conn.commit()
-    conn.close()
-
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            INSERT INTO messages
+            (user_id, message, reply, sentiment_score, model_used, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            chat_request.user_id, message, reply, sentiment_score, model_used,
+            datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+        ))
     return {
-        "reply": reply, 
-        "depression_score": depression_score,
-        "model_used": model_used
+        "reply": reply,
+        "sentiment_score": sentiment_score,
+        "model_used": model_used,
     }
+
 
 @app.get("/admin/stats")
-async def admin_stats():
-    conn = sqlite3.connect('chatbot.db')
-    c = conn.cursor()
-
-    since = datetime.now(timezone.utc) - timedelta(hours=24)
-
-    # Get depression trend data grouped by hour
-    c.execute('''
-        SELECT DATE(timestamp) as date,
-               strftime('%H:00', timestamp) as hour,  
-               AVG(depression_score) as avg_depression
-        FROM messages
-        WHERE timestamp >= ?
-        AND depression_score IS NOT NULL
-        GROUP BY date, hour
-        ORDER BY date, hour
-    ''', (since.isoformat(),))
-    rows = c.fetchall()
-
-    dates = []
-    avg_scores = []
-
-    for row in rows:
-        dates.append(f"{row[0]} {row[1]}")
-        avg_scores.append(round(row[2], 2) if row[2] is not None else 0)
-        
-    # If no data, provide sample data
-    if not dates:
-        current_time = datetime.now()
-        dates = [f"{current_time.strftime('%Y-%m-%d')} {i:02d}:00" for i in range(max(0, current_time.hour-5), current_time.hour+1)]
-        avg_scores = [0] * len(dates)
-    
-    # Total distinct active users in last hour
-    since_hour = datetime.now(timezone.utc) - timedelta(hours=1)
-    c.execute('''
-        SELECT COUNT(DISTINCT user_id)
-        FROM messages
-        WHERE timestamp >= ?
-        ''', (since_hour.isoformat(),))
-    total_active_users = c.fetchone()[0]
-
-    # Model usage statistics
-    c.execute('''
-        SELECT model_used, COUNT(*) as count
-        FROM messages
-        WHERE timestamp >= ?
-        GROUP BY model_used
-    ''', (since.isoformat(),))
-    model_stats = dict(c.fetchall())
-
-    conn.close()
-
+def admin_stats():
+    """Hourly average sentiment and active users from the last 24 hours."""
+    since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute("""
+            SELECT strftime('%Y-%m-%d %H:00', timestamp), AVG(sentiment_score)
+            FROM messages
+            WHERE datetime(timestamp) >= datetime(?)
+              AND sentiment_score IS NOT NULL
+            GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
+            ORDER BY strftime('%Y-%m-%d %H:00', timestamp)
+        """, (since,)).fetchall()
+        active_users = conn.execute("""
+            SELECT COUNT(DISTINCT user_id) FROM messages
+            WHERE datetime(timestamp) >= datetime(?)
+        """, (since,)).fetchone()[0]
     return {
-        "total_active_users": total_active_users,
-        "depression_trend": {
-            "dates": dates,
-            "avg_scores": avg_scores
+        "total_active_users": active_users,
+        "sentiment_trend": {
+            "dates": [hour for hour, _ in rows],
+            "avg_scores": [round(score, 3) for _, score in rows],
         },
-        "model_usage": model_stats
     }
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    gemini_status = "available" if gemini_model else "unavailable"
-    return {
-        "status": "healthy",
-        "gemini_api": gemini_status,
-        "local_model": "available"
-    }
 
-# Serve frontend index.html at root
 @app.get("/")
-async def root():
-    #index_path = os.path.join("chatbot", "static", "chatbot.html")
-    index_path = os.path.join("static", "chatbot.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    else:
-        return {"message": "Chatbot API is running. Frontend not found."}
+def homepage():
+    return FileResponse(BASE_DIR / "static" / "chatbot.html")
+
 
 if __name__ == "__main__":
     import uvicorn
