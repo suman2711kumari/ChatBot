@@ -2,175 +2,124 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Mental Health Chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Emotional Support Chatbot</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      display: flex;
-      gap: 20px;
-      padding: 20px;
+    body { font-family: Arial, sans-serif; display: flex; gap: 20px; padding: 20px; }
+    #chatbot, #admin { border: 1px solid #ccc; padding: 10px; width: 400px;
+      height: 500px; display: flex; flex-direction: column; }
+    #chatMessages { flex-grow: 1; overflow-y: auto; border: 1px solid #eee; padding: 5px; margin-bottom: 10px; }
+    .message { margin: 5px 0; overflow-wrap: anywhere; }
+    .user { text-align: right; color: #245bbc; }
+    .bot { text-align: left; color: #207349; }
+    #inputArea { display: flex; }
+    #userInput { flex-grow: 1; padding: 5px; min-width: 0; }
+    #sendBtn { padding: 5px 10px; }
+    .note { font-size: 12px; color: #666; }
+    @media (max-width: 850px) {
+      body { flex-direction: column; }
+      #chatbot, #admin { width: auto; }
     }
-    #chatbot, #admin {
-      border: 1px solid #ccc;
-      padding: 10px;
-      width: 400px;
-      height: 500px;
-      display: flex;
-      flex-direction: column;
-    }
-    #chatMessages {
-      flex-grow: 1;
-      overflow-y: auto;
-      border: 1px solid #eee;
-      padding: 5px;
-      margin-bottom: 10px;
-    }
-    .message {
-      margin: 5px 0;
-    }
-    .user {
-      text-align: right;
-      color: blue;
-    }
-    .bot {
-      text-align: left;
-      color: green;
-    }
-    #inputArea {
-      display: flex;
-    }
-    #userInput {
-      flex-grow: 1;
-      padding: 5px;
-    }
-    #sendBtn {
-      padding: 5px 10px;
-    }
-    #admin h3 {
-      margin-top: 0;
-    }
-    #chartContainer {
-      width: 100%;
-      height: 300px;
-    }
-    
   </style>
 </head>
 <body>
-
   <div id="chatbot">
-    <h3>Mental Health Chatbot</h3>
-    <div id="chatMessages"></div>
+    <h3>Emotional Support Chatbot</h3>
+    <div id="chatMessages" role="log" aria-live="polite"></div>
     <div id="inputArea">
-      <input type="text" id="userInput" placeholder="Type your message..." />
+      <input type="text" id="userInput" placeholder="Type your message..." maxlength="5000" />
       <button id="sendBtn">Send</button>
     </div>
+    <p class="note">Experimental language analysis, not a diagnosis or substitute for professional care.</p>
   </div>
-
   <div id="admin">
     <h3>Admin Dashboard</h3>
-    <p><b>Total Active Users (last 24h):</b> <span id="activeUsers">Loading...</span></p>
-    <canvas id="depressionChart" width="400" height="300"></canvas>
+    <p><b>Active Users (last hour):</b> <span id="activeUsers">Loading...</span></p>
+    <canvas id="stressChart" width="400" height="300"></canvas>
+    <p class="note">Hourly average model-estimated stress-language signal (0–100%). Not a clinical measure.</p>
   </div>
-
- <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-  const chatMessages = document.getElementById('chatMessages');
-  const userInput = document.getElementById('userInput');
-  const sendBtn = document.getElementById('sendBtn');
-  const activeUsersSpan = document.getElementById('activeUsers');
-  const ctx = document.getElementById('depressionChart').getContext('2d');
-
-  // Retrieve userId from localStorage or generate and store it
-  let userId = localStorage.getItem('user_id');
-  if (!userId) {
-    userId = 'user_' + Math.floor(Math.random() * 100000);
-    localStorage.setItem('user_id', userId);
-  }
-
-  // Store messages locally
-  const messages = [];
-
-  function addMessage(sender, text, depressionScore) {
-    const div = document.createElement('div');
-    div.classList.add('message', sender);
-    div.innerHTML = `<b>${sender === 'user' ? 'You' : 'Bot'}:</b> ${text}` +
-      (depressionScore !== undefined ? ` <small>(Depression score: ${depressionScore})</small>` : '');
-    chatMessages.appendChild(div);
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-  }
-
-  async function sendMessage() {
-    const text = userInput.value.trim();
-    if (!text) return;
-    addMessage('user', text);
-    userInput.value = '';
-
-    try {
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({user_id: userId, message: text})
-      });
-      const data = await res.json();
-      addMessage('bot', data.reply, data.depression_score);
-    } catch (e) {
-      addMessage('bot', "Sorry, I couldn't respond right now.");
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const chatMessages = document.getElementById('chatMessages');
+    const userInput = document.getElementById('userInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const activeUsersSpan = document.getElementById('activeUsers');
+    const ctx = document.getElementById('stressChart').getContext('2d');
+    let userId = localStorage.getItem('user_id');
+    if (!userId) {
+      userId = 'user_' + crypto.randomUUID();
+      localStorage.setItem('user_id', userId);
     }
-  }
 
-  sendBtn.addEventListener('click', sendMessage);
-  userInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') sendMessage();
-  });
-
-  // Admin dashboard chart
-  let depressionChart;
-
-  async function loadAdminStats() {
-    try {
-      const res = await fetch('/admin/stats');
-      const data = await res.json();
-      activeUsersSpan.textContent = data.total_active_users;
-
-      const labels = data.depression_trend.dates;
-      const scores = data.depression_trend.avg_scores;
-
-      if (!Array.isArray(labels) || !Array.isArray(scores) || labels.length === 0 || scores.length === 0) {
-          activeUsersSpan.textContent = 'No stats available';
-          return;
+    function addMessage(sender, text, stressProbability) {
+      const div = document.createElement('div');
+      div.classList.add('message', sender);
+      const name = document.createElement('b');
+      name.textContent = sender === 'user' ? 'You: ' : 'Bot: ';
+      div.appendChild(name);
+      div.appendChild(document.createTextNode(text));
+      if (typeof stressProbability === 'number') {
+        const score = document.createElement('small');
+        score.textContent = ' (Stress-language model signal: ' +
+          (stressProbability * 100).toFixed(1) + '%)';
+        div.appendChild(score);
       }
-      if (depressionChart) {
-        depressionChart.destroy();
-      }
-
-      depressionChart = new Chart(ctx, {
-    type: 'line',
-    data: {
-      labels: labels,
-      datasets: [{
-        label: 'Avg Depression Score',
-        data: scores,
-        borderColor: 'red',
-        fill: false,
-        tension: 0.3
-      }]
-    },
-        options: {
-          scales: {
-            y: { beginAtZero: true, max: 10 }
-          }
-        }
-      });
-    } catch (e) {
-      activeUsersSpan.textContent = 'Error loading stats';
+      chatMessages.appendChild(div);
+      chatMessages.scrollTop = chatMessages.scrollHeight;
     }
-  }
 
-  loadAdminStats();
-  // Refresh admin stats every 5 minutes
-  setInterval(loadAdminStats, 5 * 60 * 1000);
-</script>
+    async function sendMessage() {
+      const text = userInput.value.trim();
+      if (!text) return;
+      addMessage('user', text);
+      userInput.value = '';
+      sendBtn.disabled = true;
+      try {
+        const res = await fetch('/chat', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, message: text })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Request failed');
+        addMessage('bot', data.reply, data.stress_probability);
+        loadAdminStats();
+      } catch (err) {
+        addMessage('bot', 'Unable to respond: ' + err.message);
+      } finally {
+        sendBtn.disabled = false;
+        userInput.focus();
+      }
+    }
 
+    sendBtn.addEventListener('click', sendMessage);
+    userInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') sendMessage();
+    });
+
+    let stressChart;
+    async function loadAdminStats() {
+      try {
+        const res = await fetch('/admin/stats');
+        if (!res.ok) throw new Error('Stats unavailable');
+        const data = await res.json();
+        activeUsersSpan.textContent = data.total_active_users;
+        const labels = data.stress_trend.dates;
+        const scores = data.stress_trend.avg_scores;
+        if (stressChart) stressChart.destroy();
+        stressChart = new Chart(ctx, {
+          type: 'line',
+          data: { labels, datasets: [{
+            label: 'Average stress-language model signal (%)',
+            data: scores, borderColor: 'red', fill: false, tension: 0.3
+          }] },
+          options: { scales: { y: { min: 0, max: 100 } } }
+        });
+      } catch (err) {
+        activeUsersSpan.textContent = 'Error loading stats';
+      }
+    }
+    loadAdminStats();
+    setInterval(loadAdminStats, 5 * 60 * 1000);
+  </script>
 </body>
 </html>
