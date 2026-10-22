@@ -19,7 +19,7 @@ function Chatbot() {
         body: JSON.stringify({ user_id: userId, message: input })
       });
       const data = await res.json();
-      const botMessage = { sender: 'bot', text: data.reply, depression_score: data.depression_score };
+      const botMessage = { sender: 'bot', text: data.reply, stress_probability: data.stress_probability };
       setMessages(prev => [...prev, botMessage]);
     } catch {
       setMessages(prev => [...prev, { sender: 'bot', text: "Sorry, I couldn't respond right now." }]);
@@ -34,7 +34,7 @@ function Chatbot() {
         {messages.map((m, i) => (
           <div key={i} style={{textAlign: m.sender === 'user' ? 'right' : 'left', marginBottom: 6}}>
             <b>{m.sender === 'user' ? 'You' : 'Bot'}:</b> {m.text}
-            {m.depression_score !== undefined && <small> (Depression score: {m.depression_score})</small>}
+            {m.stress_probability !== undefined && <small> (Stress-language model signal:  {m.stress_probability})</small>}
           </div>
         ))}
       </div>
@@ -69,10 +69,10 @@ function AdminDashboard() {
       chartInstance.current = new Chart(chartRef.current, {
         type: 'line',
         data: {
-          labels: stats.depression_trend.dates,
+          labels: stats.stress_trend.dates,
           datasets: [{
-            label: 'Avg Depression Score',
-            data: stats.depression_trend.avg_scores,
+            label: 'Avg Stress-Language Model Signal (%)',
+            data: stats.stress_trend.avg_scores,
             borderColor: 'red',
             fill: false,
             tension: 0.3
@@ -80,7 +80,7 @@ function AdminDashboard() {
         },
         options: {
           scales: {
-            y: { beginAtZero: true, max: 10 }
+            y: { beginAtZero: true, max: 100 }
           }
         }
       });
@@ -92,7 +92,7 @@ function AdminDashboard() {
   return (
     <div style={{border: '1px solid #ccc', padding: 10, width: 600, marginTop: 20}}>
       <h3>Admin Dashboard</h3>
-      <p><b>Total Active Users (last 24h):</b> {stats.total_active_users}</p>
+      <p><b>Active Users (last hour):</b> {stats.total_active_users}</p>
       <canvas ref={chartRef} width="600" height="300"></canvas>
     </div>
   );
