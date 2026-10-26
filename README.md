@@ -21,6 +21,30 @@ Student demonstration using Python FastAPI, JavaScript, Gemini API, VADER sentim
 
 **No dataset download is necessary.** RAG reads a local reference knowledge base, not a labeled emotion/depression training set. The starter JSON is committed. To expand it, edit `knowledge/resources.json` with reviewed sources and summaries. This project does not train a new emotion classification model or an LLM.
 
+## Updated frontend: two separate pages
+
+The responsive interface now uses a calm two-panel chat layout, suggested prompts,
+conversation bubbles, message composer with Enter/Shift+Enter handling, visible response
+engine labels and optional reference links.
+
+- **Chat:** `http://127.0.0.1:8000/`
+- **Admin dashboard:** `http://127.0.0.1:8000/admin`
+
+The admin page displays a **24-hour** sentiment trend, distinct active users, total
+messages, mean VADER score and generator usage. It still calls `GET /admin/stats` and
+retains `total_active_users` and `sentiment_trend`. The analytics endpoint adds
+`message_count`, `average_sentiment` and `model_usage`.
+
+Files: `static/chatbot.html`, `static/admin.html`, `static/styles.css`,
+`static/chat.js` and `static/admin.js`. No frontend npm dependencies required.
+The chart uses Chart.js from a CDN, so the chart library itself requires
+internet access unless you choose to serve it locally.
+
+**Security:** The admin page and statistics endpoint remain **public in this student
+demo**, not authenticated. A separate page is *not* access control. Do not deploy
+it publicly or store real private conversations until authorization, privacy and
+data-retention controls are implemented.
+
 ## Run in VS Code on Windows 11
 
 ```powershell
