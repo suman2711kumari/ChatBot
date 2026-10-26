@@ -1,51 +1,78 @@
-# AI-Assisted Emotional Support Chatbot (beginner-friendly)
+# Mental Health Chatbot: Grounded RAG + Sentiment Dashboard
 
-A small, **non-clinical student project** using FastAPI, JavaScript, Gemini, VADER sentiment analysis, SQLite and Chart.js.
+Student demonstration using Python FastAPI, JavaScript, Gemini API, VADER sentiment, SQLite/Chart.js, and the retained pretrained local DialoGPT fallback.
 
-## Simple workflow
-1. JavaScript sends a message to FastAPI using POST /chat.
-2. VADER analyzes the sentence's *sentiment*, returning a compound score from -1 to +1.
-3. Gemini generates a reply when available. If its API fails, a locally cached **pretrained DialoGPT-small** model can produce a labelled offline fallback (quality is limited). The last three conversational turns provide context.
-4. SQLite stores the conversation, sentiment score and timestamp.
-5. The dashboard shows hourly average sentiment and distinct users over the last 24 hours.
+## Resume wording (unchanged)
 
-**No machine-learning training required.** VADER uses a lexicon and rules; Gemini is a pretrained model accessed through an API. The project **does not diagnose depression**.
+> Developed an AI-assisted mental health chatbot using Python (FastAPI), JavaScript and the Gemini API. Applied sentiment analysis and NLP techniques to analyse user conversations.
+>
+> Built an admin dashboard to visualize user’s interaction and mood trends over the last 24 hours.
 
-The original NRC preprocessing dataset `merged_nrc_lexicon.json` and `mentalchat.json` are kept in this branch as **earlier experiments but are not used in the running application**. Your original implementation remains in `main`, and the separate classifier experiment remains in `ml-supervised-nlp-replacement`.
+## What the new branch does
 
-## Run in VS Code on Windows
-From this branch's folder with Python 3.11 or later:
+- **RAG:** `knowledge/resources.json` contains seven short starter summaries linking to public WHO, NHS and NIMH guidance. `rag.py` converts the query and summaries into TF-IDF vectors and retrieves up to two relevant notes using cosine similarity. The notes become optional context for Gemini. Reference links are shown in the UI. Summaries are authored excerpts/interpretations, not copies of complete source documents; independently verify content and URLs.
+- **Optional semantic embeddings:** install `requirements-rag-embeddings.txt`, set `RAG_BACKEND=semantic` for pretrained `all-MiniLM-L6-v2` CPU sentence embeddings. This needs a one-time download. Without optional packages the default TF-IDF retriever works on an 8 GB laptop.
+- **Primary generator:** Gemini via `google-genai`, with up to three earlier conversational turns to improve continuity.
+- **Fallback preserved:** `microsoft/DialoGPT-small` is still attempted if Gemini fails. It must have dependencies and model weights installed/cached first. Since its answer does **not** use RAG context, any relevant links are labeled **optional reading** rather than claimed citations.
+- **NLP + dashboard preserved:** VADER compound sentiment score (-1 to +1) is stored in SQLite. `/admin/stats` retains `total_active_users` and `sentiment_trend.dates/avg_scores`; Chart.js plots hourly average sentiment over the last 24 hours. Previous legacy `depression_score` entries are not reinterpreted as a sentiment or depression measurement.
+- **Safety:** a small phrase-based emergency backstop remains. This is incomplete and not a validated crisis detector; the chatbot never diagnoses or pretends to be a therapist.
+
+## Do I need to download a dataset?
+
+**No dataset download is necessary.** RAG reads a local reference knowledge base, not a labeled emotion/depression training set. The starter JSON is committed. To expand it, edit `knowledge/resources.json` with reviewed sources and summaries. This project does not train a new emotion classification model or an LLM.
+
+## Run in VS Code on Windows 11
 
 ```powershell
+git fetch origin
+git switch feature/grounded-rag-support-2026
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-# Optional, for local DialoGPT fallback (larger download):
+# Required for your DialoGPT fallback:
 python -m pip install -r requirements-local.txt
 Copy-Item .env.example .env
 ```
 
-Put your Gemini API key in `.env`, then run:
+Fill in your own `GEMINI_API_KEY` in `.env`. Confirm your accessible Gemini model name in [Google AI Studio](https://aistudio.google.com/) and adjust `GEMINI_MODEL` if needed. Then run `python main2.py` and open <http://127.0.0.1:8000/>.
+
+DialoGPT requires an initial download of pretrained weights and can be slow on CPU. After caching, local generation can run offline; do not count on its conversational quality for support in emergencies.
+
+To use optional semantic embeddings:
 
 ```powershell
-python main2.py
+python -m pip install -r requirements-rag-embeddings.txt
 ```
 
-Open http://127.0.0.1:8000/
+Change `RAG_BACKEND=semantic` in `.env` and allow the initial sentence-transformer download. The default `tfidf` mode is simpler and faster.
 
-The default `GEMINI_MODEL=gemini-3.6-flash` is currently listed by Google, but your key still needs access and quota. If Gemini fails, the app **tries the locally cached DialoGPT-small** model when `ENABLE_DIALOGPT_FALLBACK=true`. The browser explicitly labels replies from that model. If the optional dependencies or weights are unavailable, you get a clear unavailable-service message instead. Check the VS Code terminal for the underlying Gemini error. Available models can be checked in [Google AI Studio](https://aistudio.google.com/).
+## Architecture
 
-## Interview explanation
-**How is sentiment calculated?** VADER evaluates words, negations and emphasis, and outputs `compound = S / sqrt(S² + 15)`, with a result between -1 and +1. This is **not a depression score**.
+```
+JavaScript -> POST /chat -> VADER sentiment --------> SQLite
+                      -> TF-IDF retrieval -> source notes -> Gemini
+                                                          | API failure
+                                                          v
+                                                  local DialoGPT
+                      -> JSON reply, score, source links
+JavaScript Chart.js -> GET /admin/stats -> 24-hour hourly AVG(sentiment_score)
+```
 
-**How are dashboard trends calculated?** Each hourly point is the arithmetic mean of the VADER compound scores for the messages in that hour. Old database depression_score entries remain untouched but are not combined with sentiment.
+The POST response has `reply`, `sentiment_score`, `model_used`, `references` and `suggested_reading`. When Gemini generated the response, matching official-source links appear under references, but these are **not proof** that all generated claims are supported. When fallback generates, links are labeled **optional further reading**.
 
-**Did you train an ML model?** No. This version integrates Gemini for conversational generation and uses VADER for lexicon-based NLP.
+## Tests
 
-**What about DialoGPT?** The app keeps pretrained `microsoft/DialoGPT-small` as an *optional fallback*, not an independently trained mental-health model. It is not fine-tuned and may produce irrelevant or inappropriate replies. Install `requirements-local.txt` while connected to the internet; the first actual fallback also downloads model weights. Once cached, the fallback can run without a Gemini key or network. If memory is tight, set `ENABLE_DIALOGPT_FALLBACK=false` in `.env`.
+```powershell
+python -m pip install pytest httpx
+python -m pytest -q tests
+```
 
-## Boundaries
-The phrase-based safety check is limited and can miss high-risk messages. DialoGPT is **not a safe or validated mental-health counselor**, and its offline replies may be misleading even when correctly generated. Do not rely on it for crisis advice. If Gemini is unavailable, use this only as a clearly-labelled student demo.
-This is a student demonstration, not therapy or a crisis service. The limited crisis phrase backstop is not a validated detector. VADER doesn't understand all context and sarcasm. The dashboard has no authentication, and Gemini receives user message text. Don't deploy with real private health messages without proper security and consent.
+Tests avoid external APIs by mocking Gemini/DialoGPT. They check retrieval, crisis fallback behavior, and 24-hour dashboard aggregation. Also test live Gemini, actual cached DialoGPT fallback, and the browser chart locally.
 
-A `chatbot.db` existed in the original Git history. It is ignored and removed from the **current branch contents**, but not from earlier Git commits. `.gitignore` alone does not erase past committed data.
+## Important limits
+
+**Not therapy, diagnosis, or a clinical decision system.** VADER is lexicon/rule-based NLP, not a trained depression predictor. TF-IDF retrieval is not a supervised classifier. Gemini and DialoGPT are existing pretrained LLMs.
+
+Do not deploy this as a real patient app. The admin dashboard lacks authentication; messages are stored in plaintext and sent to Gemini when enabled; consent, user access, deletion, encryption, safety evaluation, and stronger crisis handling would be required before real-world use. Only test with fictional messages. This repo has historical commits containing a `chatbot.db`; ignoring that file now does not erase old history. Check it separately for sensitive content.
+
+The **main branch and existing experimental branches remain untouched**.
