@@ -153,3 +153,36 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* The inspector is intentionally separate from the main conversation UI. */
+.rag-inspector { margin-top: 20px; }
+.inspector-heading { display: flex; justify-content: space-between; gap: 18px; align-items: start; }
+.rag-inspector h2 { margin: 9px 0; font-size: 20px; }
+.rag-form { margin: 22px 0 10px; }
+.rag-form label { display: block; font-size: 12px; font-weight: 750; color: #665d79; margin-bottom: 9px; }
+.rag-input-row { display:flex; gap: 10px; }
+.rag-input-row input { flex: 1; min-width:0; border:1px solid #ded8ec; border-radius:12px; padding:12px 14px; font:inherit; font-size: 13px; }
+.rag-input-row input:focus-visible { outline:3px solid #b0a0ea; outline-offset:2px; }
+.rag-status { margin: 11px 0 13px !important; color: #7a7287 !important; font-size: 12px !important; }
+.rag-results { display:grid; grid-template-columns: repeat(auto-fit,minmax(250px,1fr)); gap:13px; }
+.rag-match { border:1px solid #e8e3f4; border-radius:14px; background:#fbfaff; padding:16px; }
+.rag-match-top { display:flex; justify-content:space-between; flex-wrap:wrap; gap:9px; font-size:12px; color:#474060; }
+.rag-similarity { white-space:nowrap; border-radius:8px; padding:4px 8px; background:#eee8fb; color:#675297; font-size:11px; }
+.rag-subheading { margin:10px 0 !important; color:#877f94 !important; font-size:11px !important; }
+.rag-summary { color:#514a60 !important; }
+.rag-source-link { display:inline-block; margin-top:12px; color:#5d4ba7; text-decoration:underline; font-weight:750; font-size:12px; }
+.rag-compare-panel { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:16px 0; margin-top:22px; border-top:1px solid #eee9f3; }
+.rag-compare-panel strong { font-size:13px; color:#534963; }
+.rag-compare-panel p { margin-top:5px; }
+.rag-compare-panel button { flex-shrink:0; }
+.rag-compare-results { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:13px; }
+.rag-compare-card { border-radius:13px; border:1px solid #eae7f0; padding:19px; background:#fcfbff; }
+.rag-compare-card h3 { font-size:13px; margin:0 0 10px; }
+.rag-compare-card p { white-space:pre-wrap; color:#544d63 !important; }
+.rag-disclaimer { margin-top:18px !important; font-size:11px !important; }
+@media(max-width:730px) {
+  .inspector-heading,.rag-compare-panel { display:block; }
+  .rag-input-row,.rag-compare-results { display:flex; flex-direction:column; }
+  .rag-compare-panel button { margin-top:12px; }
+  .rag-results { grid-template-columns:1fr; }
+}

@@ -8,6 +8,7 @@
   <link rel="stylesheet" href="/static/styles.css">
   <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
   <script defer src="/static/admin.js"></script>
+  <script defer src="/static/rag-inspector.js"></script>
 </head>
 <body>
   <div class="shell">
@@ -61,6 +62,36 @@
           <p>Which response route handled messages in the last 24 hours.</p>
           <div class="usage-list" id="modelUsage"><span class="usage-empty">Loading usage data...</span></div>
         </aside>
+      </section>
+
+      <section class="dash-card rag-inspector" aria-labelledby="ragTitle">
+        <div class="inspector-heading">
+          <div>
+            <span class="eyebrow">Developer demonstration · RAG explained</span>
+            <h2 id="ragTitle">See how retrieval works</h2>
+            <p>Try a fictional message. The inspector shows which reference summaries are selected before Gemini generates a response.</p>
+          </div>
+          <span class="status-pill">Demo only</span>
+        </div>
+        <form id="ragForm" class="rag-form">
+          <label for="ragQuery">Example question</label>
+          <div class="rag-input-row">
+            <input id="ragQuery" type="text" maxlength="400" value="How can I manage exam stress?" required>
+            <button id="ragRun" class="refresh-button" type="submit">Show retrieval</button>
+          </div>
+        </form>
+        <p id="ragStatus" class="rag-status" role="status" aria-live="polite">Retrieval runs locally and does not call Gemini or save the query.</p>
+        <div id="ragResults" class="rag-results"></div>
+        <div class="rag-compare-panel">
+          <div>
+            <strong>Optional experiment: Gemini with and without retrieved context</strong>
+            <p>Only click for fictional examples. It makes two Gemini API calls and sends the text to the Gemini provider. Results can be similar.</p>
+          </div>
+          <button id="ragCompare" class="nav-link" type="button">Compare ON vs OFF</button>
+        </div>
+        <p id="ragCompareStatus" class="rag-status" role="status" aria-live="polite"></p>
+        <div id="ragCompareResults" class="rag-compare-results"></div>
+        <p class="rag-disclaimer">Similarity scores are text-match measurements, not medical confidence. RAG attaching notes does not prove that Gemini relied on them. This student demo has no administrator authentication.</p>
       </section>
 
       <div class="dash-notice" role="note">

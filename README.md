@@ -91,6 +91,26 @@ JavaScript Chart.js -> GET /admin/stats -> 24-hour hourly AVG(sentiment_score)
 
 The POST response has `reply`, `sentiment_score`, `model_used`, `references` and `suggested_reading`. When Gemini generated the response, matching official-source links appear under references, but these are **not proof** that all generated claims are supported. When fallback generates, links are labeled **optional further reading**.
 
+## Demo how RAG works (without cluttering the chat)
+
+The separate `/admin` page now has a **RAG Inspector**. For a *fictional*
+question such as "How can I manage exam stress?" the inspector calls
+`POST /admin/rag-preview` and shows the actual retrieved summaries and
+cosine similarity scores. **The preview doesn't call Gemini or log queries.**
+
+The optional **Compare ON vs OFF** button performs exactly two Gemini requests
+when clicked: one without knowledge-base context and one with the retrieved
+summaries. It will fail clearly if there are no relevant notes or no Gemini API key.
+The comparison sends the typed text to Gemini, so use fictional demonstrations.
+Different responses are not by themselves evidence of higher quality; a proper
+evaluation needs human-labeled references.
+
+The `/chat` API also includes `rag_info.retrieved_count`,
+`rag_info.retrieval_method`, and
+`rag_info.context_attached_to_gemini`. This records whether the application
+supplied relevant notes on the successful Gemini route, **not** whether Gemini
+actually relied on them. These diagnostics are not displayed in the chat bubbles.
+
 ## Tests
 
 ```powershell

@@ -54,12 +54,14 @@ def retrieve_resources(query: str, limit: int = 2) -> list[dict]:
     if not query or not query.strip():
         return []
     resources, _, vectorizer, vectors = _index()
+    method = "tfidf"
     if os.getenv("RAG_BACKEND", "tfidf").strip().lower() == "semantic":
         try:
             model = _semantic_model()
             query_vector = model.encode([query], normalize_embeddings=True)
             scores = cosine_similarity(query_vector, _semantic_vectors())[0]
             threshold = 0.35
+            method = "semantic"
         except Exception:
             LOGGER.warning("Semantic RAG unavailable; using TF-IDF", exc_info=True)
             scores = cosine_similarity(vectorizer.transform([query]), vectors)[0]
@@ -70,7 +72,7 @@ def retrieve_resources(query: str, limit: int = 2) -> list[dict]:
 
     ranked = sorted(enumerate(scores), key=lambda pair: pair[1], reverse=True)
     return [
-        dict(resources[index], similarity=round(float(score), 3))
+        dict(resources[index], similarity=round(float(score), 3), retrieval_method=method)
         for index, score in ranked if float(score) >= threshold
     ][:max(0, min(limit, 3))]
 

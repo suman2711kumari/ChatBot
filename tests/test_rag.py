@@ -20,3 +20,9 @@ def test_reference_notes_are_bounded(monkeypatch):
     matches = retrieve_resources("I cannot sleep at night", limit=2)
     assert len(matches) <= 2
     assert "http" in reference_context(matches)
+
+
+def test_retriever_reports_actual_method(monkeypatch):
+    monkeypatch.setenv("RAG_BACKEND", "tfidf")
+    results = retrieve_resources("I feel overwhelmed about exams")
+    assert results and all(x["retrieval_method"] == "tfidf" for x in results)

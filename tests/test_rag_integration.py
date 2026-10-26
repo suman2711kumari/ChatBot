@@ -84,3 +84,46 @@ def test_safety_backstop_catches_some_direct_phrasings():
         assert main2.check_crisis_message(text), text
     assert not main2.check_crisis_message("I am writing a report on suicide prevention")
     assert not main2.check_crisis_message("I'm stressed about my assignment")
+
+
+def test_retrieval_preview_does_not_call_gemini_or_log(tmp_path, monkeypatch):
+    monkeypatch.setattr(main2, "DB_PATH", tmp_path / "test.db")
+    main2.init_db()
+    monkeypatch.setenv("RAG_BACKEND", "tfidf")
+    with TestClient(main2.app) as client:
+        res = client.post("/admin/rag-preview", json={"query": "Ways to manage exam stress"})
+        assert res.status_code == 200
+        data = res.json()
+        assert data["generator_called"] is False
+        assert data["match_count"] == len(data["matches"])
+        assert data["matches"][0]["retrieval_method"] == "tfidf"
+        assert 0 < data["matches"][0]["similarity"] <= 1
+        stats = client.get("/admin/stats").json()
+        assert stats["message_count"] == 0
+
+
+def test_comparison_is_opt_in_and_two_calls(tmp_path, monkeypatch):
+    monkeypatch.setattr(main2, "DB_PATH", tmp_path / "test.db")
+    main2.init_db()
+    monkeypatch.setenv("RAG_BACKEND", "tfidf")
+    monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
+    calls = []
+
+    async def fake_reply(query, reference_notes):
+        calls.append(reference_notes)
+        return "Test answer"
+
+    monkeypatch.setattr(main2, "generate_demo_reply", fake_reply)
+    with TestClient(main2.app) as client:
+        res = client.post("/admin/rag-compare", json={"query": "Ways to manage exam stress"})
+        assert res.status_code == 200
+        assert res.json()["gemini_calls"] == 2
+        assert calls[0] is None
+        assert "WHO" in calls[1] or "NIMH" in calls[1]
+        assert client.get("/admin/stats").json()["message_count"] == 0
+
+
+def test_demo_does_not_allow_explicit_crisis_example():
+    with TestClient(main2.app) as client:
+        res = client.post("/admin/rag-preview", json={"query": "I want to suicide now"})
+        assert res.status_code == 400
