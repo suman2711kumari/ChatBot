@@ -54,3 +54,33 @@ def test_crisis_blocks_generation_and_reading(tmp_path, monkeypatch):
         assert data["model_used"] == "safety_message"
         assert data["references"] == []
         assert data["suggested_reading"] == []
+
+def test_suicide_intent_in_user_example_bypasses_gemini_and_rag(tmp_path, monkeypatch):
+    """Regression: earlier pattern checks missed the exact example."""
+    monkeypatch.setattr(main2, "DB_PATH", tmp_path / "test.db")
+    main2.init_db()
+    monkeypatch.setenv("GEMINI_API_KEY", "not-a-real-key")
+    with TestClient(main2.app) as client:
+        result = client.post("/chat", json={
+            "user_id": "student",
+            "message": "i want to suicide now. i know no one care for me",
+        })
+        assert result.status_code == 200
+        payload = result.json()
+        assert payload["model_used"] == "safety_message"
+        assert payload["references"] == []
+        assert payload["suggested_reading"] == []
+        assert "112" in payload["reply"]
+
+
+def test_safety_backstop_catches_some_direct_phrasings():
+    for text in [
+        "I am suicidal",
+        "I'm thinking about suicide",
+        "I want to hurt myself",
+        "I have been thinking of killing myself",
+        "I want to die",
+    ]:
+        assert main2.check_crisis_message(text), text
+    assert not main2.check_crisis_message("I am writing a report on suicide prevention")
+    assert not main2.check_crisis_message("I'm stressed about my assignment")

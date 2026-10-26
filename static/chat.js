@@ -39,33 +39,15 @@
     });
   });
 
-  function resourceLinks(stack, references, suggestedReading) {
-    const grounded = Array.isArray(references) && references.length > 0;
-    const links = grounded ? references : suggestedReading;
-    if (!Array.isArray(links) || links.length === 0) return;
-    const panel = document.createElement("div");
-    panel.className = "source-box";
-    const heading = document.createElement("p");
-    heading.className = "source-heading";
-    heading.textContent = grounded
-      ? "Relevant resources · Not verification of every claim"
-      : "Optional reading · Not used by the fallback model";
-    panel.appendChild(heading);
-    links.forEach(item => {
-      if (!item || typeof item.url !== "string") return;
-      try {
-        const url = new URL(item.url);
-        if (url.protocol !== "https:") return;
-        const link = document.createElement("a");
-        link.className = "source-link";
-        link.href = url.href;
-        link.textContent = String(item.title || url.hostname);
-        link.target = "_blank";
-        link.rel = "noopener noreferrer";
-        panel.appendChild(link);
-      } catch (_) { /* Invalid resource URL is ignored */ }
-    });
-    if (panel.querySelector("a")) stack.appendChild(panel);
+  function addUserSentiment(messageElement, score) {
+    if (typeof score !== "number" || !Number.isFinite(score)) return;
+    const metadata = messageElement.querySelector(".bubble-meta");
+    if (!metadata) return;
+    const note = document.createElement("span");
+    note.className = "sentiment-note";
+    note.title = "VADER scores the words in your message, not your feelings or mental health.";
+    note.textContent = " · Your text sentiment: " + (score > 0 ? "+" : "") + score.toFixed(2);
+    metadata.appendChild(note);
   }
 
   function appendMessage(role, message, options = {}) {
@@ -90,13 +72,7 @@
       unavailable: "Service unavailable"
     };
     meta.textContent = role === "user" ? "You" : (sourceNames[options.model_used] || "MindSpace");
-    if (role === "bot" && typeof options.sentiment_score === "number") {
-      const score = document.createElement("span");
-      score.textContent = " · Message sentiment: " + options.sentiment_score.toFixed(2);
-      meta.appendChild(score);
-    }
     stack.appendChild(meta);
-    if (role === "bot") resourceLinks(stack, options.references, options.suggested_reading);
     line.append(avatar, stack);
     log.appendChild(line);
     log.scrollTop = log.scrollHeight;
@@ -130,7 +106,7 @@
     if (!message || send.disabled) return;
     input.value = "";
     fitInput();
-    appendMessage("user", message);
+    const userLine = appendMessage("user", message);
     send.disabled = true;
     input.disabled = true;
     status.textContent = "Thinking of a response…";
@@ -154,7 +130,9 @@
         const detail = typeof data.detail === "string" ? data.detail : "The server could not process your message.";
         throw Error(detail);
       }
-      appendMessage("bot", String(data.reply || "No reply available."), data);
+      addUserSentiment(userLine, data.sentiment_score);
+      indicator.remove();
+      appendMessage("bot", String(data.reply || "No reply available."), {model_used: data.model_used});
       status.textContent = "Enter to send · Shift + Enter for a new line";
     } catch (error) {
       appendMessage("bot", error.name === "AbortError"

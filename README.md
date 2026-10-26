@@ -10,6 +10,13 @@ A simple demonstration using Python FastAPI, JavaScript, Gemini API, VADER senti
 
 ## What the new branch does
 
+## Chat readability and safety update
+
+- Sentiment scores refer to **the user's incoming text**; they are attached to that user's bubble only after `POST /chat` completes. A VADER score measures wording, not a person's emotions, and may misread context.
+- Automatic resource and suggested-reading link panels were removed from the chat UI. **RAG retrieval still runs** and its reference notes still reach Gemini. The API continues returning `references` and `suggested_reading` for compatibility, but the browser does not render them. Gemini is instructed not to add source lists unless asked.
+- Explicit first-person suicidal statements such as "I want to suicide now" now trigger the immediate-safety response rather than Gemini or DialoGPT. This small pattern matcher is incomplete and is **not validated crisis detection**.
+- SQLite storage, the independent `/admin` page, the 24-hour Chart.js sentiment trend, and the local DialoGPT fallback are preserved.
+
 - **RAG:** `knowledge/resources.json` contains seven short starter summaries linking to public WHO, NHS and NIMH guidance. `rag.py` converts the query and summaries into TF-IDF vectors and retrieves up to two relevant notes using cosine similarity. The notes become optional context for Gemini. Reference links are shown in the UI. Summaries are authored excerpts/interpretations, not copies of complete source documents; independently verify content and URLs.
 - **Optional semantic embeddings:** install `requirements-rag-embeddings.txt`, set `RAG_BACKEND=semantic` for pretrained `all-MiniLM-L6-v2` CPU sentence embeddings. This needs a one-time download. Without optional packages the default TF-IDF retriever works on an 8 GB laptop.
 - **Primary generator:** Gemini via `google-genai`, with up to three earlier conversational turns to improve continuity.

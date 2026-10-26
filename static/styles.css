@@ -64,9 +64,8 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
 .message.user .bubble { border-radius: 16px 16px 4px 16px; background: #6650aa; color: #fff; }
 .bubble-meta { font-size: 10.5px; color: #918b9e; margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px 8px; }
 .message.user .bubble-meta { justify-content: flex-end; }
-.source-box { margin-top: 10px; padding: 11px 13px; border: 1px solid #eae5f5; border-radius: 12px; background: #fbfaff; }
-.source-heading { margin: 0 0 8px; font-size: 11px; color: #6c5c91; font-weight: 800; }
-.source-link { display: block; color: #415fa0; text-decoration: underline; text-underline-offset: 2px; font-size: 12px; padding: 3px 0; line-height: 1.45; }
+.sentiment-note { cursor: help; color: #817a97; }
+.message.user .sentiment-note { color: #857f96; }
 .typing-bubble { display: flex; gap: 5px; align-items: center; padding: 16px 17px; }
 .typing-bubble span { width: 6px; height: 6px; background: #9b8acb; border-radius: 50%; animation: typing 1.25s ease infinite; }
 .typing-bubble span:nth-child(2) { animation-delay: .15s; }
