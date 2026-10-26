@@ -1,6 +1,6 @@
 # Mental Health Chatbot: Grounded RAG + Sentiment Dashboard
 
-Student demonstration using Python FastAPI, JavaScript, Gemini API, VADER sentiment, SQLite/Chart.js, and the retained pretrained local DialoGPT fallback.
+A simple demonstration using Python FastAPI, JavaScript, Gemini API, VADER sentiment, SQLite/Chart.js, and the retained pretrained local DialoGPT fallback.
 
 ## Resume wording (unchanged)
 
