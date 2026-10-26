@@ -64,7 +64,7 @@ class ChatRequest(BaseModel):
 CRISIS_PATTERNS = tuple(re.compile(p, flags=re.IGNORECASE) for p in (
     r"\b(?:kill(?:ing)?|harm(?:ing)?|hurt(?:ing)?)\s+myself\b",
     r"\b(?:end|take)\s+my\s+life\b",
-    r"\b(?:i|i'm|i am|im|i have|i've)\b.{0,75}\b(?:suicid(?:e|al)|kill(?:ing)?\s+myself)\b",
+    r"\b(?:i\s+(?:am|feel|have\s+been)|i'm|im)\s+suicidal\b",
     r"\b(?:want|wanna|plan|planning|thinking|thought|intend|intending|going)\s+(?:to\s+|about\s+|of\s+)?(?:commit\s+)?suicide\b",
     r"\b(?:i\s+want|i\s+wish|i\s+need|i\s+will|i\s+am\s+going|i'm\s+going)\s+(?:to\s+)?(?:die|be\s+dead)\b",
 ))
