@@ -111,6 +111,37 @@ The `/chat` API also includes `rag_info.retrieved_count`,
 supplied relevant notes on the successful Gemini route, **not** whether Gemini
 actually relied on them. These diagnostics are not displayed in the chat bubbles.
 
+## Optional sentiment model experiment (VADER stays the default)
+
+Your actual chatbot and admin dashboard **continue to use VADER**. Nothing
+in this experiment imports into \`main2.py\`, modifies SQLite, downloads
+weights on application startup, or changes \`SENTIMENT_BACKEND\`.
+
+To reproduce a small **illustrative, hand-authored, two-class comparison**:
+
+\`\`\`powershell
+python evaluate_sentiment.py
+\`\`\`
+
+This runs only VADER on 20 labeled example messages under
+\`evaluation/sentiment_examples.json\`. To optionally include a pretrained
+DistilBERT *sentiment-fine-tuned* model:
+
+\`\`\`powershell
+python -m pip install -r requirements-sentiment-experiment.txt
+python evaluate_sentiment.py --transformer
+\`\`\`
+
+The optional model \`distilbert-base-uncased-finetuned-sst-2-english\` learns
+**movie-review positive/negative polarity**, not mental health emotions.
+It has no neutral label and does not produce values on VADER's -1 to +1 scale.
+The comparison reports accuracy and macro F1 for these two artificial
+classes, plus individual predictions. This tiny nonrepresentative set is not
+sufficient to show that a transformer is better than VADER for real user
+messages. Use an independently labeled, in-domain dataset before changing
+the production pipeline. **Even if results look favorable, this experiment
+does not switch the sentiment backend.**
+
 ## Tests
 
 ```powershell

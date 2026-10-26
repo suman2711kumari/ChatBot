@@ -1,0 +1,102 @@
+[
+  {
+    "text": "I'm delighted that I finally got the job!",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "My application was accepted and I'm happy.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I feel proud of myself for finishing the project.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "My best friend helped me and I feel thankful.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I enjoy spending time with my friends.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "The interview went very well and I am excited.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I feel hopeful about learning a new skill.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I finally slept well and I feel refreshed.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I'm glad my hard work paid off.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "This was a lovely day and I'm grateful.",
+    "label": "positive",
+    "scenario": "clear positive"
+  },
+  {
+    "text": "I am not getting a job for six months and I am losing hope every day.",
+    "label": "negative",
+    "scenario": "mixed wording"
+  },
+  {
+    "text": "My family says I am not good enough and I feel discouraged.",
+    "label": "negative",
+    "scenario": "pressure"
+  },
+  {
+    "text": "I failed my exams and I feel hopeless.",
+    "label": "negative",
+    "scenario": "academic pressure"
+  },
+  {
+    "text": "I feel lonely even when I'm around other people.",
+    "label": "negative",
+    "scenario": "loneliness"
+  },
+  {
+    "text": "I am scared that I will never find a job.",
+    "label": "negative",
+    "scenario": "job stress"
+  },
+  {
+    "text": "My assignment is overdue and I am anxious.",
+    "label": "negative",
+    "scenario": "anxiety"
+  },
+  {
+    "text": "I can't stop worrying about the results.",
+    "label": "negative",
+    "scenario": "worry"
+  },
+  {
+    "text": "I feel frustrated that none of my applications received a response.",
+    "label": "negative",
+    "scenario": "frustration"
+  },
+  {
+    "text": "It hurts when people compare me to successful friends.",
+    "label": "negative",
+    "scenario": "social pressure"
+  },
+  {
+    "text": "I am exhausted and nothing feels enjoyable lately.",
+    "label": "negative",
+    "scenario": "low mood"
+  }
+]
