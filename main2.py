@@ -250,8 +250,22 @@ def admin_stats():
             SELECT COUNT(DISTINCT user_id) FROM messages
             WHERE datetime(timestamp) >= datetime(?)
         """, (since,)).fetchone()[0]
+        # Preserve the original sentiment-trend response contract.
+        # Extra metrics power the separate dashboard, using the same 24h window.
+        message_count, average_sentiment = conn.execute("""
+            SELECT COUNT(*), AVG(sentiment_score) FROM messages
+            WHERE datetime(timestamp) >= datetime(?)
+        """, (since,)).fetchone()
+        model_usage = dict(conn.execute("""
+            SELECT COALESCE(model_used, 'unknown'), COUNT(*) FROM messages
+            WHERE datetime(timestamp) >= datetime(?)
+            GROUP BY COALESCE(model_used, 'unknown')
+        """, (since,)).fetchall())
     return {
         "total_active_users": active_users,
+        "message_count": message_count,
+        "average_sentiment": round(average_sentiment, 3) if average_sentiment is not None else None,
+        "model_usage": model_usage,
         "sentiment_trend": {
             "dates": [hour for hour, _ in rows],
             "avg_scores": [round(score, 3) for _, score in rows],
@@ -262,6 +276,13 @@ def admin_stats():
 @app.get("/")
 def homepage():
     return FileResponse(BASE_DIR / "static" / "chatbot.html")
+
+
+@app.get("/admin", include_in_schema=False)
+@app.get("/admin/", include_in_schema=False)
+def dashboard_page():
+    """Render the standalone analytics page; not password protected."""
+    return FileResponse(BASE_DIR / "static" / "admin.html")
 
 
 if __name__ == "__main__":
