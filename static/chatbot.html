@@ -17,6 +17,8 @@
     #userInput { flex: 1; min-width: 0; padding: 8px; }
     #sendBtn { padding: 8px 12px; }
     .note { font-size: 12px; color: #666; }
+    .references { margin: 5px 0 10px; font-size: 12px; }
+    .references a { display: block; margin: 3px 0; }
     @media (max-width: 850px) {
       body { flex-direction: column; }
       #chatbot, #admin { width: auto; }
@@ -54,7 +56,7 @@
       localStorage.setItem('user_id', userId);
     }
 
-    function addMessage(sender, text, sentimentScore, modelUsed) {
+    function addMessage(sender, text, sentimentScore, modelUsed, references, suggestedReading) {
       const div = document.createElement('div');
       div.className = 'message ' + sender;
       const label = document.createElement('b');
@@ -72,6 +74,29 @@
         div.appendChild(note);
       }
       chatMessages.appendChild(div);
+      const sources = (references || []).length ? references : (suggestedReading || []);
+      if (sender === 'bot' && sources.length) {
+        const group = document.createElement('div');
+        group.className = 'references';
+        const heading = document.createElement('strong');
+        heading.textContent = (references || []).length
+          ? 'Reference resources (not proof of the reply):'
+          : 'Optional reading (not used by DialoGPT):';
+        group.appendChild(heading);
+        sources.forEach(source => {
+          try {
+            const url = new URL(source.url);
+            if (url.protocol !== 'https:') return;
+            const a = document.createElement('a');
+            a.textContent = source.title;
+            a.href = url.href;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            group.appendChild(a);
+          } catch (_) { /* Skip malformed URL */ }
+        });
+        chatMessages.appendChild(group);
+      }
       chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
@@ -88,7 +113,8 @@
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Chat request failed');
-        addMessage('bot', data.reply, data.sentiment_score, data.model_used);
+        addMessage('bot', data.reply, data.sentiment_score, data.model_used,
+          data.references, data.suggested_reading);
         loadAdminStats();
       } catch (error) {
         addMessage('bot', 'Unable to send message: ' + error.message);

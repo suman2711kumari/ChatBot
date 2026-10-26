@@ -8,7 +8,7 @@ def test_chat_and_dashboard(tmp_path, monkeypatch):
     monkeypatch.setattr(main2, "DB_PATH", tmp_path / "test.db")
     main2.init_db()
 
-    async def fake_reply(message, previous):
+    async def fake_reply(message, previous, references=None):
         return "Thanks for sharing.", "gemini"
 
     monkeypatch.setattr(main2, "generate_reply", fake_reply)
@@ -19,6 +19,7 @@ def test_chat_and_dashboard(tmp_path, monkeypatch):
         assert answer.status_code == 200
         assert answer.json()["sentiment_score"] > 0
         assert "depression_score" not in answer.json()
+        assert isinstance(answer.json()["references"], list)
         stats = client.get("/admin/stats").json()
         assert stats["total_active_users"] == 1
         assert len(stats["sentiment_trend"]["dates"]) == 1
