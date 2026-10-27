@@ -17,7 +17,7 @@ A simple demonstration using Python FastAPI, JavaScript, Gemini API, VADER senti
 - Explicit first-person suicidal statements such as "I want to suicide now" now trigger the immediate-safety response rather than Gemini or DialoGPT. This small pattern matcher is incomplete and is **not validated crisis detection**.
 - SQLite storage, the independent `/admin` page, the 24-hour Chart.js sentiment trend, and the local DialoGPT fallback are preserved.
 
-- **RAG:** `knowledge/resources.json` contains seven short starter summaries linking to public WHO, NHS and NIMH guidance. `rag.py` converts the query and summaries into TF-IDF vectors and retrieves up to two relevant notes using cosine similarity. The notes become optional context for Gemini. Reference links are shown in the UI. Summaries are authored excerpts/interpretations, not copies of complete source documents; independently verify content and URLs.
+- **RAG:** `knowledge/resources.json` contains seven short starter summaries linking to public WHO, NHS and NIMH guidance. `rag.py` converts the query and summaries into TF-IDF vectors and retrieves up to two relevant notes using cosine similarity. The notes become optional context for Gemini. Retrieved summaries are included in Gemini's prompt; source-link panels are hidden from the chat UI. Summaries are authored excerpts/interpretations, not copies of complete source documents; independently verify content and URLs.
 - **Optional semantic embeddings:** install `requirements-rag-embeddings.txt`, set `RAG_BACKEND=semantic` for pretrained `all-MiniLM-L6-v2` CPU sentence embeddings. This needs a one-time download. Without optional packages the default TF-IDF retriever works on an 8 GB laptop.
 - **Primary generator:** Gemini via `google-genai`, with up to three earlier conversational turns to improve continuity.
 - **Fallback preserved:** `microsoft/DialoGPT-small` is still attempted if Gemini fails. It must have dependencies and model weights installed/cached first. Since its answer does **not** use RAG context, any relevant links are labeled **optional reading** rather than claimed citations.
@@ -32,7 +32,7 @@ A simple demonstration using Python FastAPI, JavaScript, Gemini API, VADER senti
 
 The responsive interface now uses a calm two-panel chat layout, suggested prompts,
 conversation bubbles, message composer with Enter/Shift+Enter handling, visible response
-engine labels and optional reference links.
+engine labels and retrieval diagnostics in the separate admin page.
 
 - **Chat:** `http://127.0.0.1:8000/`
 - **Admin dashboard:** `http://127.0.0.1:8000/admin`
@@ -89,7 +89,7 @@ JavaScript -> POST /chat -> VADER sentiment --------> SQLite
 JavaScript Chart.js -> GET /admin/stats -> 24-hour hourly AVG(sentiment_score)
 ```
 
-The POST response has `reply`, `sentiment_score`, `model_used`, `references` and `suggested_reading`. When Gemini generated the response, matching official-source links appear under references, but these are **not proof** that all generated claims are supported. When fallback generates, links are labeled **optional further reading**.
+The POST response has `reply`, `sentiment_score`, `model_used`, `references` and `suggested_reading`. When Gemini generates the response, the API includes matched references for debugging but the chat interface does not show them; they are **not proof** that all generated claims are supported. Fallback suggestions remain available in API output, not displayed in chat.
 
 ## Demo how RAG works (without cluttering the chat)
 
@@ -113,26 +113,26 @@ actually relied on them. These diagnostics are not displayed in the chat bubbles
 
 ## Optional sentiment model experiment (VADER stays the default)
 
-Your actual chatbot and admin dashboard **continue to use VADER**. Nothing
-in this experiment imports into \`main2.py\`, modifies SQLite, downloads
-weights on application startup, or changes \`SENTIMENT_BACKEND\`.
+Your actual chatbot and admin dashboard **continue to use VADER**. Neither
+experiment is imported by `main2.py`, modifies SQLite, or downloads
+weights on application startup.
 
 To reproduce a small **illustrative, hand-authored, two-class comparison**:
 
-\`\`\`powershell
+```powershell
 python evaluate_sentiment.py
-\`\`\`
+```
 
 This runs only VADER on 20 labeled example messages under
-\`evaluation/sentiment_examples.json\`. To optionally include a pretrained
+`evaluation/sentiment_examples.json`. To optionally include a pretrained
 DistilBERT *sentiment-fine-tuned* model:
 
-\`\`\`powershell
+```powershell
 python -m pip install -r requirements-sentiment-experiment.txt
 python evaluate_sentiment.py --transformer
-\`\`\`
+```
 
-The optional model \`distilbert-base-uncased-finetuned-sst-2-english\` learns
+The optional model `distilbert-base-uncased-finetuned-sst-2-english` learns
 **movie-review positive/negative polarity**, not mental health emotions.
 It has no neutral label and does not produce values on VADER's -1 to +1 scale.
 The comparison reports accuracy and macro F1 for these two artificial
@@ -146,26 +146,26 @@ does not switch the sentiment backend.**
 ## Three-class sentiment comparison (no production changes)
 
 The previous 20-example VADER-versus-DistilBERT comparison is unchanged:
-\`python evaluate_sentiment.py --transformer\`.
+`python evaluate_sentiment.py --transformer`.
 
-The **new** \`evaluate_sentiment_threeclass.py\` compares:
+The **new** `evaluate_sentiment_threeclass.py` compares:
 - **VADER**: standard compound score cutoffs (negative ≤ -0.05,
   neutral between -0.05 and 0.05, positive ≥ 0.05).
 - **DistilBERT (SST-2)**: binary negative/positive only, so it **cannot**
   predict neutral. Its performance in a three-class evaluation is
   structurally disadvantaged. The script additionally prints performance
   restricted to truly non-neutral test cases.
-- **RoBERTa**: \`cardiffnlp/twitter-roberta-base-sentiment-latest\`,
+- **RoBERTa**: `cardiffnlp/twitter-roberta-base-sentiment-latest`,
   fine-tuned for negative/neutral/positive on TweetEval. It is **not
   a mental-health diagnosis or emotion recognition model**.
 
 The larger, externally labeled benchmark is a seeded, balanced sample of the
 **official TweetEval sentiment test split** (default 90 examples, 30 per class).
 The script fetches the official test text and labels once into the ignored
-\`evaluation/cache/\` folder, with no paid dataset API or Hugging Face
-\`datasets\` package needed:
+`evaluation/cache/` folder, with no paid dataset API or Hugging Face
+`datasets` package needed:
 
-\`\`\`powershell
+```powershell
 # VADER-only sanity check; no transformer download
 python evaluate_sentiment_threeclass.py --dataset tweet_eval --limit 90
 
@@ -175,7 +175,7 @@ python evaluate_sentiment_threeclass.py --dataset tweet_eval --models all --limi
 
 # Optional: inspect challenging chat-style examples (36 authored, NOT independently labeled)
 python evaluate_sentiment_threeclass.py --dataset challenges --models all
-\`\`\`
+```
 
 **What to check:** accuracy, macro-F1, per-class recall (especially
 negative and neutral), and the confusion matrices (rows = true label,
