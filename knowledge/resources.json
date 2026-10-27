@@ -1,0 +1,132 @@
+[
+  {
+    "id": "who-stress",
+    "title": "WHO: Stress and practical coping",
+    "topic": "stress",
+    "url": "https://www.who.int/en/news-room/questions-and-answers/item/stress",
+    "keywords": [
+      "stressed",
+      "stress",
+      "exams",
+      "exam",
+      "workload",
+      "overwhelmed",
+      "worry",
+      "worries",
+      "anxious",
+      "pressure"
+    ],
+    "summary": "Stress can be a response to difficult situations, including school exams and demanding workloads. People experience it differently. Practical steps can include keeping a daily routine, finding time for rest, connecting with trusted people, making space for physical activity, and reducing distressing media exposure. If difficulty coping continues or affects daily life, encourage contact with a trusted health professional."
+  },
+  {
+    "id": "nhs-breathing",
+    "title": "NHS: Gentle breathing for stress",
+    "topic": "breathing",
+    "url": "https://www.nhs.uk/mental-health/self-help/guides-tools-and-activities/breathing-exercises-for-stress/",
+    "keywords": [
+      "breath",
+      "breathing",
+      "panic",
+      "tense",
+      "calm",
+      "nervous",
+      "overwhelmed",
+      "anxiety",
+      "relax"
+    ],
+    "summary": "For someone who wants a brief relaxation exercise, NHS describes finding a comfortable position and allowing breathing to flow gently without forcing it. Breathing in through the nose and out through the mouth, with a slow comfortable count if helpful, can be practiced for several minutes. Stop if uncomfortable. This is an optional self-help exercise, not emergency or medical treatment."
+  },
+  {
+    "id": "nimh-selfcare",
+    "title": "NIMH: Caring for your mental health",
+    "topic": "self-care",
+    "url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health",
+    "keywords": [
+      "mental",
+      "health",
+      "sad",
+      "lonely",
+      "routine",
+      "motivation",
+      "self-care",
+      "exhausted",
+      "tired",
+      "focus",
+      "support"
+    ],
+    "summary": "Practical self-care ideas include regular movement, meals, hydration, enough sleep, enjoyable low-pressure activities, setting realistic priorities, and staying connected with supportive people. Different approaches suit different people. If troubling symptoms persist, worsen, or interfere with daily life, seeking professional help may be appropriate."
+  },
+  {
+    "id": "who-skills",
+    "title": "WHO: Doing What Matters in Times of Stress",
+    "topic": "grounding",
+    "url": "https://www.who.int/publications/i/item/9789240003927",
+    "keywords": [
+      "grounding",
+      "stress",
+      "overthinking",
+      "rumination",
+      "thoughts",
+      "difficult feelings",
+      "overwhelmed",
+      "uncertainty",
+      "mindful"
+    ],
+    "summary": "WHO's illustrated self-help guide introduces skills for coping with difficult thoughts and feelings, including grounding and noticing what is happening in the present moment. A person may practice small, manageable exercises over time. Offer these techniques as optional resources rather than a cure or diagnosis."
+  },
+  {
+    "id": "nimh-sleep",
+    "title": "NIMH: Sleep and daily self-care",
+    "topic": "sleep",
+    "url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health",
+    "keywords": [
+      "sleep",
+      "insomnia",
+      "bedtime",
+      "night",
+      "rest",
+      "tired",
+      "exhausted",
+      "phone",
+      "screen"
+    ],
+    "summary": "Making sleep a priority can include keeping a consistent schedule and reducing screen exposure before bedtime. Regular activity during the day and a calming wind-down routine may help. Persistent sleep difficulty that affects daily functioning deserves individualized advice from a qualified professional."
+  },
+  {
+    "id": "who-connection",
+    "title": "WHO: Connection and support during stress",
+    "topic": "connection",
+    "url": "https://www.who.int/en/news-room/questions-and-answers/item/stress",
+    "keywords": [
+      "alone",
+      "lonely",
+      "isolated",
+      "friend",
+      "family",
+      "talk",
+      "connection",
+      "support",
+      "relationships"
+    ],
+    "summary": "Keeping in touch with family or friends and discussing concerns with a trusted person may help someone feel supported. People respond to stress in different ways, so ask whether they want emotional support, practical problem-solving, or simply to be heard. Do not pressure them to share more than they choose."
+  },
+  {
+    "id": "nimh-goals",
+    "title": "NIMH: Setting priorities and small goals",
+    "topic": "study-planning",
+    "url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health",
+    "keywords": [
+      "study",
+      "studying",
+      "examination",
+      "assignment",
+      "deadline",
+      "productivity",
+      "priorities",
+      "college",
+      "academic",
+      "exam"
+    ],
+    "summary": "When responsibilities feel overwhelming, identifying which tasks need attention first and which can wait can help make a schedule manageable. Break one task into a small next step, notice what was completed, and allow time for rest. Encourage flexible plans without judging academic performance."
+  }
+]
