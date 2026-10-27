@@ -1,7 +1,6 @@
-"""Compare three sentiment approaches without changing the chatbot.
+"""Compare VADER and RoBERTa sentiment without changing the chatbot.
 
 - VADER uses standard -0.05 / +0.05 cutoffs for three labels.
-- DistilBERT is a binary SST-2 classifier (cannot predict neutral).
 - RoBERTa predicts negative / neutral / positive.
 - Official TweetEval test data is downloaded to a local ignored cache on demand.
 - The optional authored challenge set is separate and NOT an independent benchmark.
@@ -23,10 +22,7 @@ CACHE = ROOT / "evaluation" / "cache" / "tweeteval" / "sentiment"
 TWEETEVAL_URL = "https://raw.githubusercontent.com/cardiffnlp/tweeteval/main/datasets/sentiment/"
 LABELS = ("negative", "neutral", "positive")
 LABEL_IDS = {"0": "negative", "1": "neutral", "2": "positive"}
-MODEL_NAMES = {
-    "distilbert": "distilbert-base-uncased-finetuned-sst-2-english",
-    "roberta": "cardiffnlp/twitter-roberta-base-sentiment-latest",
-}
+ROBERTA_MODEL = "cardiffnlp/twitter-roberta-base-sentiment-latest"
 
 
 def read_challenges(path=CHALLENGE_FILE):
@@ -122,31 +118,21 @@ def predict_vader(examples):
             for item in examples]
 
 
-def decode_model_label(raw, model_key):
-    """Normalize Hugging Face labels, including numeric model-config labels."""
+def decode_model_label(raw):
+    """Normalize RoBERTa labels, including numeric model-config labels."""
     key = str(raw).strip().lower()
-    if key in LABELS:
-        label = key
-    else:
-        mapping = {
-            "distilbert": {"label_0": "negative", "label_1": "positive"},
-            "roberta": {"label_0": "negative", "label_1": "neutral",
-                        "label_2": "positive"},
-        }
-        label = mapping.get(model_key, {}).get(key)
+    mapping = {"label_0": "negative", "label_1": "neutral",
+               "label_2": "positive"}
+    label = mapping.get(key, key)
     if label not in LABELS:
-        raise ValueError(f"Unexpected label {raw!r} from model {model_key}")
-    if model_key == "distilbert" and label == "neutral":
-        raise ValueError("The chosen DistilBERT checkpoint has no neutral class")
+        raise ValueError(f"Unexpected RoBERTa label: {raw!r}")
     return label
 
 
-def predict_transformer(examples, model_key, batch_size=4):
-    """Run one model at a time on CPU to reduce memory pressure."""
-    if model_key not in MODEL_NAMES:
-        raise ValueError("Unknown model: " + model_key)
+def predict_roberta(examples, batch_size=4):
+    """Run pretrained RoBERTa on CPU with small batches."""
     from transformers import pipeline
-    model = MODEL_NAMES[model_key]
+    model = ROBERTA_MODEL
     print(f"Loading {model} (first run downloads pretrained weights)...", flush=True)
     classifier = pipeline("text-classification", model=model, device=-1)
     texts = [item["text"] for item in examples]
@@ -160,9 +146,9 @@ def predict_transformer(examples, model_key, batch_size=4):
                 # Some transformers versions return a nested singleton list.
                 if isinstance(output, list):
                     output = output[0]
-                predictions.append(decode_model_label(output["label"], model_key))
+                predictions.append(decode_model_label(output["label"]))
             if (start + len(batch)) % 30 == 0:
-                print(f"  {model_key}: {start + len(batch)}/{len(texts)} evaluated", flush=True)
+                print(f"  roberta: {start + len(batch)}/{len(texts)} evaluated", flush=True)
     finally:
         del classifier
         gc.collect()
@@ -204,15 +190,11 @@ def report(examples, predicted, class_labels=LABELS):
 
 
 def selected_models(value):
-    """VADER is always a baseline, and transformers run only if requested."""
-    if value == "all":
-        return ("vader", "distilbert", "roberta")
+    """VADER is the baseline; optionally compare with RoBERTa."""
     if value == "vader":
         return ("vader",)
     if value == "roberta":
         return ("vader", "roberta")
-    if value == "distilbert":
-        return ("vader", "distilbert")
     raise ValueError("Invalid --models selection")
 
 
@@ -220,8 +202,8 @@ def main():
     parser = argparse.ArgumentParser(description="Three-class sentiment benchmark; live chatbot unchanged")
     parser.add_argument("--dataset", choices=("tweet_eval", "challenges"),
                         default="tweet_eval", help="TweetEval test set or authored examples")
-    parser.add_argument("--models", choices=("vader", "distilbert", "roberta", "all"),
-                        default="vader", help="Default only runs VADER; 'all' downloads two pretrained models")
+    parser.add_argument("--models", choices=("vader", "roberta"),
+                        default="vader", help="Default VADER only; 'roberta' compares both")
     parser.add_argument("--limit", type=int, default=90,
                         help="Balanced TweetEval sample size; multiple of 3 (default 90)")
     parser.add_argument("--seed", type=int, default=42,
@@ -248,17 +230,12 @@ def main():
     print("Class counts:", dict(Counter(x["label"] for x in examples)))
     print("Interpretation: positive/neutral/negative text, not psychological status.\n")
 
-    predictions_by_model = {}
     for name in selected_models(args.models):
         predictions = (predict_vader(examples) if name == "vader"
-                       else predict_transformer(examples, name))
-        predictions_by_model[name] = predictions
+                       else predict_roberta(examples))
         result = report(examples, predictions)
         print(f"\n{name.upper()} (three-class; {len(examples)} messages)")
         print(json.dumps(result, indent=2))
-        if name == "distilbert":
-            print("NOTE: This SST-2 classifier CANNOT predict neutral; "
-                  "three-class accuracy is structurally limited.")
         mistakes = [(item, guess) for item, guess in zip(examples, predictions)
                     if item["label"] != guess]
         for item, guess in mistakes[:max(0, args.errors)]:
@@ -267,22 +244,10 @@ def main():
         if name != "vader":
             gc.collect()
 
-    if "distilbert" in predictions_by_model:
-        # Fairer secondary check: only evaluate true positive/negative cases.
-        indices = [i for i, item in enumerate(examples) if item["label"] != "neutral"]
-        subset = [examples[i] for i in indices]
-        print("\nNON-NEUTRAL SUBSET ONLY: DistilBERT vs other models")
-        for name, predicted in predictions_by_model.items():
-            guesses = [predicted[i] for i in indices]
-            # A three-class model's neutral prediction counts as a mistake.
-            # Compute binary accuracy directly, not a renormalized score.
-            binary_acc = sum(row["label"] == guess for row, guess
-                             in zip(subset, guesses)) / len(subset)
-            print(f"  {name}: {binary_acc:.3f} accuracy on {len(subset)} true non-neutral examples")
     print("\nLIMITATIONS: TweetEval measures short social-media sentiment, NOT "
           "mental-health evaluation. RoBERTa was fine-tuned on TweetEval's "
           "training split, so it has an in-domain advantage. This is a "
-          "pretrained-inference experiment, not BERT training.")
+          "pretrained-inference experiment, not transformer training.")
     print("No VADER backend, dashboard, SQLite data, or chatbot code has been changed.")
 
 
