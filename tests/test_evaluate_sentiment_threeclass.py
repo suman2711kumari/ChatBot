@@ -17,15 +17,13 @@ def test_vader_thresholds():
 
 
 def test_hf_label_mapping():
-    assert decode_model_label("POSITIVE", "roberta") == "positive"
-    assert decode_model_label("Neutral", "roberta") == "neutral"
-    assert decode_model_label("LABEL_0", "roberta") == "negative"
-    assert decode_model_label("LABEL_1", "roberta") == "neutral"
-    assert decode_model_label("LABEL_2", "roberta") == "positive"
-    assert decode_model_label("LABEL_0", "distilbert") == "negative"
-    assert decode_model_label("LABEL_1", "distilbert") == "positive"
+    assert decode_model_label("POSITIVE") == "positive"
+    assert decode_model_label("Neutral") == "neutral"
+    assert decode_model_label("LABEL_0") == "negative"
+    assert decode_model_label("LABEL_1") == "neutral"
+    assert decode_model_label("LABEL_2") == "positive"
     with pytest.raises(ValueError):
-        decode_model_label("neutral", "distilbert")
+        decode_model_label("LABEL_3")
 
 
 def test_balanced_repeatable_sample():
@@ -90,4 +88,4 @@ def test_challenge_set_is_three_class():
     assert len(rows) >= 30
     assert {x["label"] for x in rows} == set(LABELS)
     assert selected_models("roberta") == ("vader", "roberta")
-    assert selected_models("all") == ("vader", "distilbert", "roberta")
+    assert selected_models("vader") == ("vader",)

@@ -44,7 +44,7 @@ private conversations without consent/security/access controls.
 ## How to enable OPTIONAL RoBERTa sentiment
 
 ```powershell
-python -m pip install -r requirements-sentiment-experiment.txt
+python -m pip install -r requirements-roberta.txt
 ```
 
 In your local `.env` file, set:
@@ -108,12 +108,24 @@ The API defaults to the model configured in `.env` or you can select
 `sentiment_message_count` indicates how many message scores contributed.
 
 
+### Compare VADER and RoBERTa (optional experiment)
+
+```powershell
+# Lightweight VADER baseline only
+python evaluate_sentiment_threeclass.py --dataset tweet_eval --limit 90
+
+# With RoBERTa (uses cached model weights if available)
+python evaluate_sentiment_threeclass.py --dataset tweet_eval --models roberta --limit 90
+
+# Chat-style, hand-authored examples
+python evaluate_sentiment_threeclass.py --dataset challenges --models roberta
+```
+
 User-reported results:
 
 | Model | TweetEval accuracy (90) | Authored chat examples (36) |
 | --- | ---: | ---: |
 | VADER | 55.56% | 94.44% |
-| DistilBERT (binary) | 48.89% | 66.67% |
 | RoBERTa (three-class) | 68.89% | 100% |
 
 The authored examples are **not** an independent benchmark. RoBERTa was
@@ -150,3 +162,18 @@ real pretrained model weights are not needed for unit tests. Verify
 a real chat request, dashboard model selector and actual cached model
 on your local Windows laptop before demoing to interviewers.
 
+
+
+## Two-day interview study focus
+
+For the sentiment classifier, only study **RoBERTa** as the transformer:
+tokenization, transformer encoder and self-attention, classifier logits,
+softmax, and `sentiment_score = P(positive) - P(negative)`. This repo uses
+a pretrained model: **no transformer training or fine-tuning was performed**.
+
+VADER is a fast lexicon-based comparison and an automatic fallback if
+RoBERTa cannot load. You only need its basic definition and why it
+can misread context, not an additional deep-learning tutorial.
+
+Gemini generates responses; optional pretrained DialoGPT is the separate
+response-generation fallback. TF-IDF is the default RAG retriever.
