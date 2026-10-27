@@ -3,10 +3,20 @@ from fastapi.testclient import TestClient
 import main2
 
 
+def fake_sentiment(message):
+    return {
+        "sentiment_score": -0.4, "sentiment_label": "negative",
+        "sentiment_model": "roberta",
+        "sentiment_probabilities": {"negative": .6, "neutral": .2, "positive": .2},
+    }
+
+
+
 def test_references_with_gemini_mock(tmp_path, monkeypatch):
     monkeypatch.setattr(main2, "DB_PATH", tmp_path / "test.db")
     main2.init_db()
     monkeypatch.setenv("RAG_BACKEND", "tfidf")
+    monkeypatch.setattr(main2, "score_sentiment", fake_sentiment)
 
     async def fake_reply(message, previous, references=None):
         assert references

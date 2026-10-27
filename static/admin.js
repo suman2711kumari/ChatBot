@@ -5,10 +5,7 @@
   const active = document.getElementById("activeUsers");
   const count = document.getElementById("messageCount");
   const average = document.getElementById("averageSentiment");
-  const averageCaption = document.getElementById("averageSentimentCaption");
-  const sentimentSelect = document.getElementById("sentimentModel");
   const sentimentDataStatus = document.getElementById("sentimentDataStatus");
-  let chosenSentimentModel = null;
   const usage = document.getElementById("modelUsage");
   const empty = document.getElementById("chartEmpty");
   const canvas = document.getElementById("sentimentChart");
@@ -55,7 +52,7 @@
     }
   }
 
-  function drawChart(trend, selectedModel) {
+  function drawChart(trend) {
     const dates = Array.isArray(trend?.dates) ? trend.dates : [];
     const values = Array.isArray(trend?.avg_scores) ? trend.avg_scores : [];
     const hasPoints = dates.length > 0 && dates.length === values.length;
@@ -78,7 +75,7 @@
       data: {
         labels,
         datasets: [{
-          label: "Average " + (selectedModel === "roberta" ? "RoBERTa" : "VADER") + " sentiment",
+          label: "Average RoBERTa sentiment",
           data: values,
           borderColor: "#6650aa",
           backgroundColor: "rgba(102,80,170,.09)",
@@ -94,7 +91,7 @@
         responsive: true,
         interaction: {mode: "index", intersect: false},
         plugins: {legend: {display: false}, tooltip: {callbacks: {
-          label: context => "Average " + (selectedModel === "roberta" ? "RoBERTa" : "VADER") + ": " + Number(context.raw).toFixed(3)
+          label: context => "Average RoBERTa: " + Number(context.raw).toFixed(3)
         }}},
         scales: {
           y: {
@@ -112,26 +109,17 @@
     refresh.disabled = true;
     refresh.textContent = "Refreshing…";
     try {
-      const url = chosenSentimentModel
-        ? "/admin/stats?sentiment_model=" + encodeURIComponent(chosenSentimentModel)
-        : "/admin/stats";
-      const response = await fetch(url, {cache: "no-store"});
+      const response = await fetch("/admin/stats", {cache: "no-store"});
       if (!response.ok) throw Error("Server returned " + response.status);
       const data = await response.json();
-      chosenSentimentModel = data.sentiment_model || "vader";
-      sentimentSelect.value = chosenSentimentModel;
-      averageCaption.textContent = (chosenSentimentModel === "roberta"
-        ? "RoBERTa positive − negative probability"
-        : "VADER compound score") + " · −1 to +1";
       sentimentDataStatus.textContent = (data.sentiment_message_count ?? 0)
-        + " message(s) scored by " + (chosenSentimentModel === "roberta" ? "RoBERTa" : "VADER")
-        + " in the last 24 hours. Response usage counts include all messages.";
+        + " messages scored by RoBERTa in the last 24 hours. Older scores excluded.";
       active.textContent = String(data.total_active_users ?? 0);
       count.textContent = String(data.message_count ?? 0);
       average.textContent = typeof data.average_sentiment === "number"
         ? (data.average_sentiment >= 0 ? "+" : "") + data.average_sentiment.toFixed(2)
         : "—";
-      drawChart(data.sentiment_trend, chosenSentimentModel);
+      drawChart(data.sentiment_trend);
       drawUsage(data.model_usage);
       status.textContent = "Last refreshed " + new Date().toLocaleTimeString([], {hour: "numeric", minute: "2-digit"});
     } catch (error) {
@@ -144,10 +132,6 @@
       refresh.textContent = "↻   Refresh data";
     }
   }
-  sentimentSelect.addEventListener("change", () => {
-    chosenSentimentModel = sentimentSelect.value;
-    loadStats();
-  });
   refresh.addEventListener("click", loadStats);
   loadStats();
   setInterval(loadStats, 5 * 60 * 1000);

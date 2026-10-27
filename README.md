@@ -1,179 +1,128 @@
-# MindSpace | Mental health support chatbot
+# MindSpace | RoBERTa + RAG Support Chatbot
 
-FastAPI + JavaScript + Gemini API + TF-IDF retrieval (RAG) + SQLite/Chart.js,
-with an optional local DialoGPT response fallback and optional RoBERTa
-sentiment inference. This is a **non-clinical student demonstration**, not
-therapy, a depression diagnosis or validated crisis-risk assessment.
+Student demonstration built with Python FastAPI, JavaScript, pretrained
+**RoBERTa** sentiment inference, a Gemini response generator, TF-IDF RAG,
+SQLite and Chart.js. A local pretrained DialoGPT-small remains an optional
+fallback for **reply generation**, not sentiment scoring.
 
-## Main components
+This is NOT therapy, a mental-health diagnosis, distress scoring, or a
+validated crisis detector. Use fictional example messages only. Admin
+endpoints have no authentication and chat text is saved unencrypted.
 
-- **Generation:** Gemini API (subject to provider's pricing, quota and privacy
-  terms), or optional local pretrained DialoGPT-small when Gemini fails.
-- **Retrieval:** TF-IDF/cosine similarity over seven concise, curated public
-  WHO/NHS/NIMH summaries in `knowledge/resources.json`, optionally
-  sentence-embedding retrieval (`requirements-rag-embeddings.txt`,
-  `RAG_BACKEND=semantic`). Retrieved notes are attached as optional Gemini
-  context; the API has `rag_info` diagnostics and a separate admin RAG Inspector.
-- **Sentiment:** VADER's compound lexicon score by default. Optional
-  three-class RoBERTa with a separately defined polarity score. These do **not**
-  measure mental health, depression, distress or user satisfaction.
-- **Analytics:** last 24h message count, distinct users, generator usage,
-  and a sentiment trend that **never averages different models together**.
+## Architecture
 
-## Run in VS Code (Windows)
+```text
+Web UI (static/chat.js) -- POST /chat --> main2.py
+   |                                     |
+   |                                     +--> sentiment_engine.py: RoBERTa
+   |                                     |     Hugging Face + PyTorch, CPU
+   |                                     |     P(pos) - P(neg) --> SQLite
+   |                                     |
+   |                                     +--> rag.py: TF-IDF + cosine similarity
+   |                                     |     knowledge/resources.json
+   |                                     |     --> reference notes for Gemini
+   |                                     |
+   |                                     +--> Gemini API --> conversational reply
+   |                                           on API failure: local DialoGPT
+   |
+Admin dashboard (static/admin.js) <-- /admin/stats -- SQLite
+   Only RoBERTa messages contribute to sentiment graph and average.
+```
+
+## Install & run on Windows
 
 ```powershell
-# If the virtual environment already exists, activate it instead:
+git fetch origin
+# After merging this branch into main:
+git switch main
+git pull --ff-only
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-# Only for optional local DialoGPT fallback:
-python -m pip install -r requirements-local.txt
-# First-time setup only: Copy-Item .env.example .env
 python main2.py
 ```
 
-Set `GEMINI_API_KEY` in your local `.env`, and confirm your accessible
-`GEMINI_MODEL`.  Visit
-http://127.0.0.1:8000/ for chat, http://127.0.0.1:8000/admin for analytics.
+Copy `.env.example` to `.env` only if you don't already have `.env`.
+Keep your real `GEMINI_API_KEY` there; it must never be committed.
+Do not replace your existing `.env` or delete your SQLite database.
 
-The admin page and stats API are **not password protected**. SQLite stores
-chat messages as plaintext, and Gemini receives messages when enabled.
-**Use fictional data locally**. Do not deploy for real patient use or collect
-private conversations without consent/security/access controls.
+- Chat: http://127.0.0.1:8000/
+- Admin: http://127.0.0.1:8000/admin
 
-## How to enable OPTIONAL RoBERTa sentiment
+### RoBERTa text sentiment
 
-```powershell
-python -m pip install -r requirements-roberta.txt
-```
-
-In your local `.env` file, set:
-
-```text
-SENTIMENT_BACKEND=roberta
-```
-
-Start `python main2.py`. RoBERTa runs locally on CPU with pretrained
-`cardiffnlp/twitter-roberta-base-sentiment-latest`. No model training,
-GPU or paid API is required for sentiment inference. The first request
-downloads/loads weights (~500 MB download), and CPU inference may be slow,
-especially with the optional DialoGPT fallback on an 8 GB laptop. For a
-lighter default set `SENTIMENT_BACKEND=vader`.
-
-If RoBERTa can't load/run, that message explicitly falls back to VADER:
-its API output and stored `sentiment_model` indicate the actual backend.
-Model errors also appear in server logs. Normal app startup does not
-download RoBERTa automatically.
-
-### Exactly how the score is calculated
-
-The pretrained transformer encoder represents the whole message using
-learned contextual features. Its classification head produces **three
-logits** for `negative`, `neutral`, and `positive`. Hugging Face's
-`pipeline("text-classification", top_k=None)` applies **Softmax**:
+Pretrained checkpoint:
+`cardiffnlp/twitter-roberta-base-sentiment-latest`.
+The Hugging Face text-classification pipeline runs locally on CPU after
+initial model weights download (about 500 MB). It predicts probabilities
+for three classes: negative, neutral and positive. Softmax converts the
+classifier logits to probabilities summing approximately to 1.
 
 ```text
-P(class i) = exp(logit[i]) / sum(exp(all three logits))
-
-sentiment_score = P(positive) - P(negative)
-
-Illustrative probabilities:
-negative=0.80, neutral=0.15, positive=0.05
-sentiment_score = 0.05 - 0.80 = -0.75
+Custom sentiment_score = P(positive) - P(negative)
+Example probabilities:
+  negative: 0.80
+  neutral:  0.15
+  positive: 0.05
+Score: 0.05 - 0.80 = -0.75
 ```
 
-The chosen class label is the one with maximum probability; its polarity
-score lies in [-1, +1]. Near zero may also mean positive/negative
-uncertainty or mixed sentiment rather than neutral wording. Model outputs
-are not calibrated measures of emotion or mental health. **RoBERTa's
-probability-difference score is not interchangeable with VADER's compound.**
+The label is the class with maximum probability. Scores fall in [-1,1],
+but they do NOT measure emotions, depression, or health status.
+These are pretrained weights: no local model training or fine-tuning.
 
-`POST /chat` returns `sentiment_score`, `sentiment_model`,
-`sentiment_label` and `sentiment_probabilities` (null for VADER). The
-database stores the score, label and actual sentiment backend per message.
-Existing VADER sentiment records are safely tagged VADER during schema
-migration. Old `depression_score` data is left alone.
+If the model cannot be loaded or inference fails, the app still generates
+a response using its independent reply engine. Its text sentiment score
+is `null`, with `sentiment_status="unavailable"`. No alternative
+sentiment calculation is performed, no misleading score is substituted.
+An immediate-safety reply skips sentiment inference.
 
-### Separate analytics in the admin dashboard
+Old sentiment rows remain stored in SQLite and are *not deleted or
+recalculated*. Their scores are excluded from the RoBERTa-only chart.
+The admin page reports only the last 24 hours of RoBERTa scores.
+`POST /chat` returns `sentiment_score`, `sentiment_label`,
+`sentiment_model`, `sentiment_probabilities`, `sentiment_status`
+and reply/RAG metadata.
 
-The dashboard's **Sentiment model** dropdown lets you choose which model's
-records feed the average and the trend. It never averages VADER and
-RoBERTa together. If there are no messages scored with the selected
-model in the previous 24h, those metrics are empty. The counts of users,
-messages and response engines still include *all* message records.
+## RAG
 
-The API defaults to the model configured in `.env` or you can select
-`GET /admin/stats?sentiment_model=vader` or
-`GET /admin/stats?sentiment_model=roberta`. The additional
-`sentiment_message_count` indicates how many message scores contributed.
+`rag.py` reads curated resource summaries from
+`knowledge/resources.json`. The default uses Scikit-learn TF-IDF
+unigram/bigram vectors and cosine similarity to retrieve up to two
+relevant notes. The notes become optional context in the Gemini prompt
+in `main2.py`. This is prompt grounding, not training Gemini.
+Optional MiniLM sentence-embedding retrieval can be enabled with
+`RAG_BACKEND=semantic`, requiring
+`python -m pip install -r requirements-rag-embeddings.txt`.
+No vector database or paid dataset is required.
 
+## Other code
 
-### Compare VADER and RoBERTa (optional experiment)
+- `main2.py`: FastAPI, Gemini API, DialoGPT response fallback,
+  phrase-based immediate-safety backstop, recent conversation context,
+  SQLite and 24-hour analytics.
+- `sentiment_engine.py`: the only sentiment model, RoBERTa.
+- `rag.py` and `knowledge/resources.json`: retrieval + local notes.
+- `static/chat.js`, `static/chatbot.html`: chat UI and model score.
+- `static/admin.js`, `static/admin.html`: 24h trends and counts.
+- `static/rag-inspector.js`: retrieval inspector and opt-in two-request
+  Gemini context comparison.
+- `tests/`: mocked unit and endpoint checks.
 
-```powershell
-# Lightweight VADER baseline only
-python evaluate_sentiment_threeclass.py --dataset tweet_eval --limit 90
-
-# With RoBERTa (uses cached model weights if available)
-python evaluate_sentiment_threeclass.py --dataset tweet_eval --models roberta --limit 90
-
-# Chat-style, hand-authored examples
-python evaluate_sentiment_threeclass.py --dataset challenges --models roberta
-```
-
-User-reported results:
-
-| Model | TweetEval accuracy (90) | Authored chat examples (36) |
-| --- | ---: | ---: |
-| VADER | 55.56% | 94.44% |
-| RoBERTa (three-class) | 68.89% | 100% |
-
-The authored examples are **not** an independent benchmark. RoBERTa was
-fine-tuned on TweetEval's training set, giving it an in-domain advantage
-on its held-out TweetEval tests. Tweet sentiment differs from emotional
-support conversations. None of these results establishes clinical
-reliability or overall real-world performance.
-
-- https://github.com/cardiffnlp/tweeteval
-- https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest
-
-## RAG Inspector
-
-The independent `/admin` page includes a RAG Inspector that previews
-retrieved source summaries and similarity scores without a Gemini call
-or conversation logging. The optional RAG ON/OFF comparison performs
-**two Gemini API requests** when explicitly clicked, so it can consume
-free API quota; only use fictional prompts. This does not prove one
-answer is more correct than the other. No reference links are appended
-automatically to chat bubbles.
-
-The safety backstop recognizes some explicit self-harm phrases but is
-**not a validated detector**. It is independent of the sentiment score.
-
-## Tests
+## Test
 
 ```powershell
 python -m pip install pytest httpx
 python -m pytest -q tests
 ```
 
-The tests mock Gemini, DialoGPT and optional RoBERTa inference;
-real pretrained model weights are not needed for unit tests. Verify
-a real chat request, dashboard model selector and actual cached model
-on your local Windows laptop before demoing to interviewers.
+Live RoBERTa inference and the Gemini API need separate manual smoke
+tests; mocked unit tests cannot verify model weights or live quotas.
 
+## Limitations
 
-
-## Two-day interview study focus
-
-For the sentiment classifier, only study **RoBERTa** as the transformer:
-tokenization, transformer encoder and self-attention, classifier logits,
-softmax, and `sentiment_score = P(positive) - P(negative)`. This repo uses
-a pretrained model: **no transformer training or fine-tuning was performed**.
-
-VADER is a fast lexicon-based comparison and an automatic fallback if
-RoBERTa cannot load. You only need its basic definition and why it
-can misread context, not an additional deep-learning tutorial.
-
-Gemini generates responses; optional pretrained DialoGPT is the separate
-response-generation fallback. TF-IDF is the default RAG retriever.
+The sentiment model was fine-tuned for social-media polarity, not
+counseling or clinical use. It cannot diagnose depression or reliably
+detect crises. Immediate-safety phrase recognition is incomplete.
+There is no administrator authentication; do not deploy this prototype
+for real private conversations. The independent RAG Inspector is a
+development demonstration, not a measure of clinical correctness.
