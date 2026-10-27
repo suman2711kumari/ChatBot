@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 chatbot.db
 chatbot.db-*
+# Downloaded public benchmark data for local evaluation
+evaluation/cache/

@@ -142,6 +142,67 @@ messages. Use an independently labeled, in-domain dataset before changing
 the production pipeline. **Even if results look favorable, this experiment
 does not switch the sentiment backend.**
 
+
+## Three-class sentiment comparison (no production changes)
+
+The previous 20-example VADER-versus-DistilBERT comparison is unchanged:
+\`python evaluate_sentiment.py --transformer\`.
+
+The **new** \`evaluate_sentiment_threeclass.py\` compares:
+- **VADER**: standard compound score cutoffs (negative ≤ -0.05,
+  neutral between -0.05 and 0.05, positive ≥ 0.05).
+- **DistilBERT (SST-2)**: binary negative/positive only, so it **cannot**
+  predict neutral. Its performance in a three-class evaluation is
+  structurally disadvantaged. The script additionally prints performance
+  restricted to truly non-neutral test cases.
+- **RoBERTa**: \`cardiffnlp/twitter-roberta-base-sentiment-latest\`,
+  fine-tuned for negative/neutral/positive on TweetEval. It is **not
+  a mental-health diagnosis or emotion recognition model**.
+
+The larger, externally labeled benchmark is a seeded, balanced sample of the
+**official TweetEval sentiment test split** (default 90 examples, 30 per class).
+The script fetches the official test text and labels once into the ignored
+\`evaluation/cache/\` folder, with no paid dataset API or Hugging Face
+\`datasets\` package needed:
+
+\`\`\`powershell
+# VADER-only sanity check; no transformer download
+python evaluate_sentiment_threeclass.py --dataset tweet_eval --limit 90
+
+# Optional, requires a one-time transformer download and may be slow on an 8 GB CPU laptop
+python -m pip install -r requirements-sentiment-experiment.txt
+python evaluate_sentiment_threeclass.py --dataset tweet_eval --models all --limit 90
+
+# Optional: inspect challenging chat-style examples (36 authored, NOT independently labeled)
+python evaluate_sentiment_threeclass.py --dataset challenges --models all
+\`\`\`
+
+**What to check:** accuracy, macro-F1, per-class recall (especially
+negative and neutral), and the confusion matrices (rows = true label,
+columns = prediction). See which messages the models get wrong.
+Transformer models are loaded *one at a time*, CPU-only, with small
+batches to reduce RAM use. The first model download needs internet;
+subsequent runs use cached model weights and cached TweetEval data.
+The authored challenge examples are informal tests, not an independent
+ground-truth dataset. Nothing downloads or runs on normal chatbot startup.
+
+**Important validity limits:** RoBERTa was fine-tuned on TweetEval,
+so it has an in-domain advantage on the TweetEval test set. Tweet
+sentiment and emotional-support chat messages are not the same domain.
+The 36 authored challenge labels may be subjective. These benchmarks do
+not establish medical performance, and scores cannot be treated as
+measures of individual happiness or mental health. Even if RoBERTa gets
+a better F1, **do not automatically replace the live VADER classifier**.
+The app's SQLite schema and 24-hour VADER chart stay unchanged.
+
+Data/model references:
+- [TweetEval official repository](https://github.com/cardiffnlp/tweeteval)
+- [RoBERTa model card](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest)
+
+TweetEval's original data sources can carry additional reuse restrictions;
+the script downloads for local study and does not redistribute the dataset
+inside this repository.
+
 ## Tests
 
 ```powershell

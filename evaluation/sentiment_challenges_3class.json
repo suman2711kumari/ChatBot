@@ -1,0 +1,182 @@
+[
+  {
+    "text": "I have been rejected after six interviews and I feel completely defeated.",
+    "label": "negative",
+    "scenario": "job-pressure"
+  },
+  {
+    "text": "I'm worried that I will disappoint my parents if I do not get placed.",
+    "label": "negative",
+    "scenario": "career-anxiety"
+  },
+  {
+    "text": "I keep comparing myself with my classmates and it makes me miserable.",
+    "label": "negative",
+    "scenario": "social-comparison"
+  },
+  {
+    "text": "I feel alone and don't have anyone to share my worries with.",
+    "label": "negative",
+    "scenario": "loneliness"
+  },
+  {
+    "text": "Everyone thinks I am fine but I'm exhausted inside.",
+    "label": "negative",
+    "scenario": "hidden-distress"
+  },
+  {
+    "text": "I used to enjoy studying, but now I dread opening my books.",
+    "label": "negative",
+    "scenario": "academic-strain"
+  },
+  {
+    "text": "My exam result was worse than I expected and I'm upset.",
+    "label": "negative",
+    "scenario": "disappointment"
+  },
+  {
+    "text": "Even though I got another chance, I'm still very frightened about failing.",
+    "label": "negative",
+    "scenario": "mixed-concern"
+  },
+  {
+    "text": "I feel anxious before every interview even after preparing for weeks.",
+    "label": "negative",
+    "scenario": "worry"
+  },
+  {
+    "text": "I really wanted that internship, but they didn't select me.",
+    "label": "negative",
+    "scenario": "rejection"
+  },
+  {
+    "text": "I feel frustrated because all my efforts seem pointless.",
+    "label": "negative",
+    "scenario": "frustration"
+  },
+  {
+    "text": "I am not feeling hopeful about the future right now.",
+    "label": "negative",
+    "scenario": "negation"
+  },
+  {
+    "text": "I started a new internship and I'm excited about what I might learn.",
+    "label": "positive",
+    "scenario": "career-positive"
+  },
+  {
+    "text": "My friend encouraged me today and I feel much more confident.",
+    "label": "positive",
+    "scenario": "support"
+  },
+  {
+    "text": "I finally solved a difficult bug and it feels amazing.",
+    "label": "positive",
+    "scenario": "achievement"
+  },
+  {
+    "text": "I got invited to an interview and I'm genuinely happy.",
+    "label": "positive",
+    "scenario": "good-news"
+  },
+  {
+    "text": "I was nervous yesterday, but today I feel optimistic again.",
+    "label": "positive",
+    "scenario": "recovery"
+  },
+  {
+    "text": "I am proud that I continued practicing even when it was difficult.",
+    "label": "positive",
+    "scenario": "pride"
+  },
+  {
+    "text": "I had a relaxing evening with my friends and feel refreshed.",
+    "label": "positive",
+    "scenario": "connection"
+  },
+  {
+    "text": "My professor appreciated my project and I'm delighted.",
+    "label": "positive",
+    "scenario": "recognition"
+  },
+  {
+    "text": "I feel grateful that my family is supporting my studies.",
+    "label": "positive",
+    "scenario": "gratitude"
+  },
+  {
+    "text": "My final round went much better than I feared.",
+    "label": "positive",
+    "scenario": "comparison"
+  },
+  {
+    "text": "I feel more at ease after talking with someone I trust.",
+    "label": "positive",
+    "scenario": "comfort"
+  },
+  {
+    "text": "I wasn't unhappy with the interview; it actually went well.",
+    "label": "positive",
+    "scenario": "negation"
+  },
+  {
+    "text": "My placement interview is scheduled for Thursday.",
+    "label": "neutral",
+    "scenario": "scheduling"
+  },
+  {
+    "text": "I am working on a chatbot using FastAPI and SQLite.",
+    "label": "neutral",
+    "scenario": "technical"
+  },
+  {
+    "text": "The library opens at nine o'clock in the morning.",
+    "label": "neutral",
+    "scenario": "factual"
+  },
+  {
+    "text": "I have three lectures and a laboratory session tomorrow.",
+    "label": "neutral",
+    "scenario": "planning"
+  },
+  {
+    "text": "I submitted my assignment through the college portal.",
+    "label": "neutral",
+    "scenario": "academic-factual"
+  },
+  {
+    "text": "I am learning how tokenization works in BERT.",
+    "label": "neutral",
+    "scenario": "learning"
+  },
+  {
+    "text": "The train from Kolkata departs at seven in the evening.",
+    "label": "neutral",
+    "scenario": "transport"
+  },
+  {
+    "text": "I will review my notes after dinner.",
+    "label": "neutral",
+    "scenario": "routine"
+  },
+  {
+    "text": "The HR interview lasts approximately twenty minutes.",
+    "label": "neutral",
+    "scenario": "interview-factual"
+  },
+  {
+    "text": "My team has five members working on the same project.",
+    "label": "neutral",
+    "scenario": "team-factual"
+  },
+  {
+    "text": "The recruiter sent me a list of documents to upload.",
+    "label": "neutral",
+    "scenario": "administration"
+  },
+  {
+    "text": "My course covers probability, database systems, and networking.",
+    "label": "neutral",
+    "scenario": "subject-factual"
+  }
+]
