@@ -12,6 +12,11 @@ def test_chat_and_dashboard(tmp_path, monkeypatch):
         return "Thanks for sharing.", "gemini"
 
     monkeypatch.setattr(main2, "generate_reply", fake_reply)
+    monkeypatch.setattr(main2, "score_sentiment", lambda message: {
+        "sentiment_score": .8, "sentiment_label": "positive",
+        "sentiment_model": "roberta",
+        "sentiment_probabilities": {"negative": .05, "neutral": .1, "positive": .85},
+    })
     with TestClient(main2.app) as client:
         answer = client.post("/chat", json={
             "user_id": "student", "message": "I am happy!"

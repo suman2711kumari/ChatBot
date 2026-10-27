@@ -44,6 +44,8 @@ def test_admin_metrics_use_same_24h_window(tmp_path, monkeypatch):
                 ("old", "yesterday", "hi", -1, "gemini", stale),
             ],
         )
+    with sqlite3.connect(main2.DB_PATH) as conn:
+        conn.execute("UPDATE messages SET sentiment_model = 'roberta' WHERE user_id IN ('a', 'b')")
     with TestClient(main2.app) as client:
         stats = client.get("/admin/stats")
         assert stats.status_code == 200
