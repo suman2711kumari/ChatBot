@@ -43,14 +43,22 @@
           <div class="metric-icon" aria-hidden="true">◈</div>
           <p class="metric-label">Average sentiment</p>
           <p class="metric-value" id="averageSentiment">—</p>
-          <p class="metric-caption">VADER compound score · −1 to +1</p>
+          <p class="metric-caption" id="averageSentimentCaption">Selected sentiment model · −1 to +1</p>
         </article>
       </section>
 
       <section class="dash-grid" aria-label="Charts and model usage">
         <article class="dash-card">
           <h2>Sentiment over time</h2>
-          <p>Average sentiment of user messages grouped by UTC hour, displayed in your local time. Higher is more positive; lower is more negative.</p>
+          <div class="sentiment-selector">
+            <label for="sentimentModel">Sentiment model</label>
+            <select id="sentimentModel" aria-label="Choose sentiment model for trend and average">
+              <option value="vader">VADER (lexicon)</option>
+              <option value="roberta">RoBERTa (transformer)</option>
+            </select>
+          </div>
+          <p>Each trend contains only messages scored by the selected model, grouped by UTC hour and displayed in your local time.</p>
+          <p id="sentimentDataStatus" class="metric-caption">Loading sentiment data...</p>
           <div class="chart-shell">
             <canvas id="sentimentChart" role="img" aria-label="Line chart of average sentiment per hour in the last 24 hours"></canvas>
             <div class="empty-data" id="chartEmpty" hidden><div><strong>No messages in this period yet</strong>Send a test message from the chat page and refresh.</div></div>
@@ -96,7 +104,7 @@
 
       <div class="dash-notice" role="note">
         <span aria-hidden="true">ⓘ</span>
-        <div><strong>Privacy &amp; interpretation.</strong> This dashboard is a just a demo, not a clinical system. VADER assesses message tone, not happiness, depression, or a person's mental health.</div>
+        <div><strong>Privacy &amp; interpretation.</strong> This dashboard is a demo, not a clinical system. VADER and RoBERTa estimate text polarity, not happiness, depression, or a person's mental health. Their scores must not be mixed as one measurement.</div>
       </div>
       <footer class="dash-footer"><span id="refreshStatus" role="status" aria-live="polite">Waiting for first refresh</span> · Automatic refresh every 5 minutes</footer>
     </main>

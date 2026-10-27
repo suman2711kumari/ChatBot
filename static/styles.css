@@ -186,3 +186,8 @@ a:focus-visible, button:focus-visible, textarea:focus-visible { outline: 3px sol
   .rag-compare-panel button { margin-top:12px; }
   .rag-results { grid-template-columns:1fr; }
 }
+
+/* Model-separated sentiment chart selector */
+.sentiment-selector { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; margin: .8rem 0; }
+.sentiment-selector label { font-size: .87rem; color: #514669; font-weight: 600; }
+.sentiment-selector select { padding: .45rem .65rem; border: 1px solid #d6cfe6; border-radius: 9px; background: #fff; color: #35264f; font: inherit; }

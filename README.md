@@ -1,207 +1,157 @@
-# Mental Health Chatbot: Grounded RAG + Sentiment Dashboard
+# MindSpace | Student mental health support chatbot
 
-A simple demonstration using Python FastAPI, JavaScript, Gemini API, VADER sentiment, SQLite/Chart.js, and the retained pretrained local DialoGPT fallback.
+FastAPI + JavaScript + Gemini API + TF-IDF retrieval (RAG) + SQLite/Chart.js,
+with an optional local DialoGPT response fallback and optional RoBERTa
+sentiment inference. This is a **non-clinical student demonstration**, not
+therapy, a depression diagnosis or validated crisis-risk assessment.
 
-## Resume wording (unchanged)
+## Main components
 
-> Developed an AI-assisted mental health chatbot using Python (FastAPI), JavaScript and the Gemini API. Applied sentiment analysis and NLP techniques to analyse user conversations.
->
-> Built an admin dashboard to visualize user’s interaction and mood trends over the last 24 hours.
+- **Generation:** Gemini API (subject to provider's pricing, quota and privacy
+  terms), or optional local pretrained DialoGPT-small when Gemini fails.
+- **Retrieval:** TF-IDF/cosine similarity over seven concise, curated public
+  WHO/NHS/NIMH summaries in `knowledge/resources.json`, optionally
+  sentence-embedding retrieval (`requirements-rag-embeddings.txt`,
+  `RAG_BACKEND=semantic`). Retrieved notes are attached as optional Gemini
+  context; the API has `rag_info` diagnostics and a separate admin RAG Inspector.
+- **Sentiment:** VADER's compound lexicon score by default. Optional
+  three-class RoBERTa with a separately defined polarity score. These do **not**
+  measure mental health, depression, distress or user satisfaction.
+- **Analytics:** last 24h message count, distinct users, generator usage,
+  and a sentiment trend that **never averages different models together**.
 
-## What the new branch does
-
-## Chat readability and safety update
-
-- Sentiment scores refer to **the user's incoming text**; they are attached to that user's bubble only after `POST /chat` completes. A VADER score measures wording, not a person's emotions, and may misread context.
-- Automatic resource and suggested-reading link panels were removed from the chat UI. **RAG retrieval still runs** and its reference notes still reach Gemini. The API continues returning `references` and `suggested_reading` for compatibility, but the browser does not render them. Gemini is instructed not to add source lists unless asked.
-- Explicit first-person suicidal statements such as "I want to suicide now" now trigger the immediate-safety response rather than Gemini or DialoGPT. This small pattern matcher is incomplete and is **not validated crisis detection**.
-- SQLite storage, the independent `/admin` page, the 24-hour Chart.js sentiment trend, and the local DialoGPT fallback are preserved.
-
-- **RAG:** `knowledge/resources.json` contains seven short starter summaries linking to public WHO, NHS and NIMH guidance. `rag.py` converts the query and summaries into TF-IDF vectors and retrieves up to two relevant notes using cosine similarity. The notes become optional context for Gemini. Retrieved summaries are included in Gemini's prompt; source-link panels are hidden from the chat UI. Summaries are authored excerpts/interpretations, not copies of complete source documents; independently verify content and URLs.
-- **Optional semantic embeddings:** install `requirements-rag-embeddings.txt`, set `RAG_BACKEND=semantic` for pretrained `all-MiniLM-L6-v2` CPU sentence embeddings. This needs a one-time download. Without optional packages the default TF-IDF retriever works on an 8 GB laptop.
-- **Primary generator:** Gemini via `google-genai`, with up to three earlier conversational turns to improve continuity.
-- **Fallback preserved:** `microsoft/DialoGPT-small` is still attempted if Gemini fails. It must have dependencies and model weights installed/cached first. Since its answer does **not** use RAG context, any relevant links are labeled **optional reading** rather than claimed citations.
-- **NLP + dashboard preserved:** VADER compound sentiment score (-1 to +1) is stored in SQLite. `/admin/stats` retains `total_active_users` and `sentiment_trend.dates/avg_scores`; Chart.js plots hourly average sentiment over the last 24 hours. Previous legacy `depression_score` entries are not reinterpreted as a sentiment or depression measurement.
-- **Safety:** a small phrase-based emergency backstop remains. This is incomplete and not a validated crisis detector; the chatbot never diagnoses or pretends to be a therapist.
-
-## Do I need to download a dataset?
-
-**No dataset download is necessary.** RAG reads a local reference knowledge base, not a labeled emotion/depression training set. The starter JSON is committed. To expand it, edit `knowledge/resources.json` with reviewed sources and summaries. This project does not train a new emotion classification model or an LLM.
-
-## Updated frontend: two separate pages
-
-The responsive interface now uses a calm two-panel chat layout, suggested prompts,
-conversation bubbles, message composer with Enter/Shift+Enter handling, visible response
-engine labels and retrieval diagnostics in the separate admin page.
-
-- **Chat:** `http://127.0.0.1:8000/`
-- **Admin dashboard:** `http://127.0.0.1:8000/admin`
-
-The admin page displays a **24-hour** sentiment trend, distinct active users, total
-messages, mean VADER score and generator usage. It still calls `GET /admin/stats` and
-retains `total_active_users` and `sentiment_trend`. The analytics endpoint adds
-`message_count`, `average_sentiment` and `model_usage`.
-
-Files: `static/chatbot.html`, `static/admin.html`, `static/styles.css`,
-`static/chat.js` and `static/admin.js`. No frontend npm dependencies required.
-The chart uses Chart.js from a CDN, so the chart library itself requires
-internet access unless you choose to serve it locally.
-
-**Security:** The admin page and statistics endpoint remain **public in this student
-demo**, not authenticated. A separate page is *not* access control. Do not deploy
-it publicly or store real private conversations until authorization, privacy and
-data-retention controls are implemented.
-
-## Run in VS Code on Windows 11
+## Run in VS Code (Windows)
 
 ```powershell
 git fetch origin
 git switch feature/grounded-rag-support-2026
-python -m venv .venv
+git pull --ff-only
+# If the virtual environment already exists, activate it instead:
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
-# Required for your DialoGPT fallback:
+# Only for optional local DialoGPT fallback:
 python -m pip install -r requirements-local.txt
-Copy-Item .env.example .env
+# First-time setup only: Copy-Item .env.example .env
+python main2.py
 ```
 
-Fill in your own `GEMINI_API_KEY` in `.env`. Confirm your accessible Gemini model name in [Google AI Studio](https://aistudio.google.com/) and adjust `GEMINI_MODEL` if needed. Then run `python main2.py` and open <http://127.0.0.1:8000/>.
+Set `GEMINI_API_KEY` in your local `.env`, and confirm your accessible
+`GEMINI_MODEL`. Never commit your key. Visit
+http://127.0.0.1:8000/ for chat, http://127.0.0.1:8000/admin for analytics.
 
-DialoGPT requires an initial download of pretrained weights and can be slow on CPU. After caching, local generation can run offline; do not count on its conversational quality for support in emergencies.
+The admin page and stats API are **not password protected**. SQLite stores
+chat messages as plaintext, and Gemini receives messages when enabled.
+**Use fictional data locally**. Do not deploy for real patient use or collect
+private conversations without consent/security/access controls.
 
-To use optional semantic embeddings:
-
-```powershell
-python -m pip install -r requirements-rag-embeddings.txt
-```
-
-Change `RAG_BACKEND=semantic` in `.env` and allow the initial sentence-transformer download. The default `tfidf` mode is simpler and faster.
-
-## Architecture
-
-```
-JavaScript -> POST /chat -> VADER sentiment --------> SQLite
-                      -> TF-IDF retrieval -> source notes -> Gemini
-                                                          | API failure
-                                                          v
-                                                  local DialoGPT
-                      -> JSON reply, score, source links
-JavaScript Chart.js -> GET /admin/stats -> 24-hour hourly AVG(sentiment_score)
-```
-
-The POST response has `reply`, `sentiment_score`, `model_used`, `references` and `suggested_reading`. When Gemini generates the response, the API includes matched references for debugging but the chat interface does not show them; they are **not proof** that all generated claims are supported. Fallback suggestions remain available in API output, not displayed in chat.
-
-## Demo how RAG works (without cluttering the chat)
-
-The separate `/admin` page now has a **RAG Inspector**. For a *fictional*
-question such as "How can I manage exam stress?" the inspector calls
-`POST /admin/rag-preview` and shows the actual retrieved summaries and
-cosine similarity scores. **The preview doesn't call Gemini or log queries.**
-
-The optional **Compare ON vs OFF** button performs exactly two Gemini requests
-when clicked: one without knowledge-base context and one with the retrieved
-summaries. It will fail clearly if there are no relevant notes or no Gemini API key.
-The comparison sends the typed text to Gemini, so use fictional demonstrations.
-Different responses are not by themselves evidence of higher quality; a proper
-evaluation needs human-labeled references.
-
-The `/chat` API also includes `rag_info.retrieved_count`,
-`rag_info.retrieval_method`, and
-`rag_info.context_attached_to_gemini`. This records whether the application
-supplied relevant notes on the successful Gemini route, **not** whether Gemini
-actually relied on them. These diagnostics are not displayed in the chat bubbles.
-
-## Optional sentiment model experiment (VADER stays the default)
-
-Your actual chatbot and admin dashboard **continue to use VADER**. Neither
-experiment is imported by `main2.py`, modifies SQLite, or downloads
-weights on application startup.
-
-To reproduce a small **illustrative, hand-authored, two-class comparison**:
-
-```powershell
-python evaluate_sentiment.py
-```
-
-This runs only VADER on 20 labeled example messages under
-`evaluation/sentiment_examples.json`. To optionally include a pretrained
-DistilBERT *sentiment-fine-tuned* model:
+## How to enable OPTIONAL RoBERTa sentiment
 
 ```powershell
 python -m pip install -r requirements-sentiment-experiment.txt
+```
+
+In your local `.env` file, set:
+
+```text
+SENTIMENT_BACKEND=roberta
+```
+
+Restart `python main2.py`. RoBERTa runs locally on CPU with pretrained
+`cardiffnlp/twitter-roberta-base-sentiment-latest`. No model training,
+GPU or paid API is required for sentiment inference. The first request
+downloads/loads weights (~500 MB download), and CPU inference may be slow,
+especially with the optional DialoGPT fallback on an 8 GB laptop. For a
+lighter default set `SENTIMENT_BACKEND=vader`.
+
+If RoBERTa can't load/run, that message explicitly falls back to VADER:
+its API output and stored `sentiment_model` indicate the actual backend.
+Model errors also appear in server logs. Normal app startup does not
+download RoBERTa automatically.
+
+### Exactly how the score is calculated
+
+The pretrained transformer encoder represents the whole message using
+learned contextual features. Its classification head produces **three
+logits** for `negative`, `neutral`, and `positive`. Hugging Face's
+`pipeline("text-classification", top_k=None)` applies **Softmax**:
+
+```text
+P(class i) = exp(logit[i]) / sum(exp(all three logits))
+
+sentiment_score = P(positive) - P(negative)
+
+Illustrative probabilities:
+negative=0.80, neutral=0.15, positive=0.05
+sentiment_score = 0.05 - 0.80 = -0.75
+```
+
+The chosen class label is the one with maximum probability; its polarity
+score lies in [-1, +1]. Near zero may also mean positive/negative
+uncertainty or mixed sentiment rather than neutral wording. Model outputs
+are not calibrated measures of emotion or mental health. **RoBERTa's
+probability-difference score is not interchangeable with VADER's compound.**
+
+`POST /chat` returns `sentiment_score`, `sentiment_model`,
+`sentiment_label` and `sentiment_probabilities` (null for VADER). The
+database stores the score, label and actual sentiment backend per message.
+Existing VADER sentiment records are safely tagged VADER during schema
+migration. Old `depression_score` data is left alone.
+
+### Separate analytics in the admin dashboard
+
+The dashboard's **Sentiment model** dropdown lets you choose which model's
+records feed the average and the trend. It never averages VADER and
+RoBERTa together. If there are no messages scored with the selected
+model in the previous 24h, those metrics are empty. The counts of users,
+messages and response engines still include *all* message records.
+
+The API defaults to the model configured in `.env` or you can select
+`GET /admin/stats?sentiment_model=vader` or
+`GET /admin/stats?sentiment_model=roberta`. The additional
+`sentiment_message_count` indicates how many message scores contributed.
+
+## What was evaluated, and what it means
+
+```powershell
+# Original binary VADER vs DistilBERT (20 illustrative authored examples):
 python evaluate_sentiment.py --transformer
-```
 
-The optional model `distilbert-base-uncased-finetuned-sst-2-english` learns
-**movie-review positive/negative polarity**, not mental health emotions.
-It has no neutral label and does not produce values on VADER's -1 to +1 scale.
-The comparison reports accuracy and macro F1 for these two artificial
-classes, plus individual predictions. This tiny nonrepresentative set is not
-sufficient to show that a transformer is better than VADER for real user
-messages. Use an independently labeled, in-domain dataset before changing
-the production pipeline. **Even if results look favorable, this experiment
-does not switch the sentiment backend.**
-
-
-## Three-class sentiment comparison (no production changes)
-
-The previous 20-example VADER-versus-DistilBERT comparison is unchanged:
-`python evaluate_sentiment.py --transformer`.
-
-The **new** `evaluate_sentiment_threeclass.py` compares:
-- **VADER**: standard compound score cutoffs (negative ≤ -0.05,
-  neutral between -0.05 and 0.05, positive ≥ 0.05).
-- **DistilBERT (SST-2)**: binary negative/positive only, so it **cannot**
-  predict neutral. Its performance in a three-class evaluation is
-  structurally disadvantaged. The script additionally prints performance
-  restricted to truly non-neutral test cases.
-- **RoBERTa**: `cardiffnlp/twitter-roberta-base-sentiment-latest`,
-  fine-tuned for negative/neutral/positive on TweetEval. It is **not
-  a mental-health diagnosis or emotion recognition model**.
-
-The larger, externally labeled benchmark is a seeded, balanced sample of the
-**official TweetEval sentiment test split** (default 90 examples, 30 per class).
-The script fetches the official test text and labels once into the ignored
-`evaluation/cache/` folder, with no paid dataset API or Hugging Face
-`datasets` package needed:
-
-```powershell
-# VADER-only sanity check; no transformer download
-python evaluate_sentiment_threeclass.py --dataset tweet_eval --limit 90
-
-# Optional, requires a one-time transformer download and may be slow on an 8 GB CPU laptop
-python -m pip install -r requirements-sentiment-experiment.txt
+# Balanced official TweetEval test split, 90 messages:
 python evaluate_sentiment_threeclass.py --dataset tweet_eval --models all --limit 90
 
-# Optional: inspect challenging chat-style examples (36 authored, NOT independently labeled)
+# Authored student-chat stress tests, 36 examples:
 python evaluate_sentiment_threeclass.py --dataset challenges --models all
 ```
 
-**What to check:** accuracy, macro-F1, per-class recall (especially
-negative and neutral), and the confusion matrices (rows = true label,
-columns = prediction). See which messages the models get wrong.
-Transformer models are loaded *one at a time*, CPU-only, with small
-batches to reduce RAM use. The first model download needs internet;
-subsequent runs use cached model weights and cached TweetEval data.
-The authored challenge examples are informal tests, not an independent
-ground-truth dataset. Nothing downloads or runs on normal chatbot startup.
+User-reported results:
 
-**Important validity limits:** RoBERTa was fine-tuned on TweetEval,
-so it has an in-domain advantage on the TweetEval test set. Tweet
-sentiment and emotional-support chat messages are not the same domain.
-The 36 authored challenge labels may be subjective. These benchmarks do
-not establish medical performance, and scores cannot be treated as
-measures of individual happiness or mental health. Even if RoBERTa gets
-a better F1, **do not automatically replace the live VADER classifier**.
-The app's SQLite schema and 24-hour VADER chart stay unchanged.
+| Model | TweetEval accuracy (90) | Authored chat examples (36) |
+| --- | ---: | ---: |
+| VADER | 55.56% | 94.44% |
+| DistilBERT (binary) | 48.89% | 66.67% |
+| RoBERTa (three-class) | 68.89% | 100% |
 
-Data/model references:
-- [TweetEval official repository](https://github.com/cardiffnlp/tweeteval)
-- [RoBERTa model card](https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest)
+The authored examples are **not** an independent benchmark. RoBERTa was
+fine-tuned on TweetEval's training set, giving it an in-domain advantage
+on its held-out TweetEval tests. Tweet sentiment differs from emotional
+support conversations. None of these results establishes clinical
+reliability or overall real-world performance.
 
-TweetEval's original data sources can carry additional reuse restrictions;
-the script downloads for local study and does not redistribute the dataset
-inside this repository.
+- https://github.com/cardiffnlp/tweeteval
+- https://huggingface.co/cardiffnlp/twitter-roberta-base-sentiment-latest
+
+## RAG Inspector
+
+The independent `/admin` page includes a RAG Inspector that previews
+retrieved source summaries and similarity scores without a Gemini call
+or conversation logging. The optional RAG ON/OFF comparison performs
+**two Gemini API requests** when explicitly clicked, so it can consume
+free API quota; only use fictional prompts. This does not prove one
+answer is more correct than the other. No reference links are appended
+automatically to chat bubbles.
+
+The safety backstop recognizes some explicit self-harm phrases but is
+**not a validated detector**. It is independent of the sentiment score.
 
 ## Tests
 
@@ -210,12 +160,23 @@ python -m pip install pytest httpx
 python -m pytest -q tests
 ```
 
-Tests avoid external APIs by mocking Gemini/DialoGPT. They check retrieval, crisis fallback behavior, and 24-hour dashboard aggregation. Also test live Gemini, actual cached DialoGPT fallback, and the browser chart locally.
+The tests mock Gemini, DialoGPT and optional RoBERTa inference;
+real pretrained model weights are not needed for unit tests. Verify
+a real chat request, dashboard model selector and actual cached model
+on your local Windows laptop before demoing to interviewers.
 
-## Important limits
+## Repository cleanup
 
-**Not therapy, diagnosis, or a clinical decision system.** VADER is lexicon/rule-based NLP, not a trained depression predictor. TF-IDF retrieval is not a supervised classifier. Gemini and DialoGPT are existing pretrained LLMs.
+Removed from the working feature branch: unused
+`merged_nrc_lexicon.json`, unused `mentalchat.json` experimental
+dataset, the bundled `get-pip.py` installer, and a machine-specific
+`.vscode/settings.json`. Production files, optional experiments, tests,
+`knowledge/resources.json`, and all required dependency manifests remain.
 
-Do not deploy this as a real patient app. The admin dashboard lacks authentication; messages are stored in plaintext and sent to Gemini when enabled; consent, user access, deletion, encryption, safety evaluation, and stronger crisis handling would be required before real-world use. Only test with fictional messages. This repo has historical commits containing a `chatbot.db`; ignoring that file now does not erase old history. Check it separately for sensitive content.
+Git history is retained. The `main` branch is **not modified**.
 
-The **main branch and existing experimental branches remain untouched**.
+**Accurate interview wording:** "I implemented Gemini-powered chat
+responses and local document retrieval, evaluated pretrained DistilBERT
+and RoBERTa sentiment classifiers against VADER, and optionally use
+RoBERTa probabilities to calculate a [-1,+1] text-polarity score.
+I did not train or fine-tune the transformer."

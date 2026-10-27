@@ -39,14 +39,16 @@
     });
   });
 
-  function addUserSentiment(messageElement, score) {
+  function addUserSentiment(messageElement, score, model) {
     if (typeof score !== "number" || !Number.isFinite(score)) return;
     const metadata = messageElement.querySelector(".bubble-meta");
     if (!metadata) return;
     const note = document.createElement("span");
     note.className = "sentiment-note";
-    note.title = "VADER scores the words in your message, not your feelings or mental health.";
-    note.textContent = " · Your text sentiment: " + (score > 0 ? "+" : "") + score.toFixed(2);
+    const name = model === "roberta" ? "RoBERTa" : "VADER";
+    note.title = name + " estimates text polarity, not feelings or mental health.";
+    note.textContent = " · Text sentiment (" + name + "): "
+      + (score > 0 ? "+" : "") + score.toFixed(2);
     metadata.appendChild(note);
   }
 
@@ -130,7 +132,7 @@
         const detail = typeof data.detail === "string" ? data.detail : "The server could not process your message.";
         throw Error(detail);
       }
-      addUserSentiment(userLine, data.sentiment_score);
+      addUserSentiment(userLine, data.sentiment_score, data.sentiment_model);
       indicator.remove();
       appendMessage("bot", String(data.reply || "No reply available."), {model_used: data.model_used});
       status.textContent = "Enter to send · Shift + Enter for a new line";

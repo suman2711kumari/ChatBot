@@ -1,9 +1,10 @@
-"""Simple FastAPI chatbot: VADER sentiment, Gemini replies and SQLite dashboard.
+"""FastAPI support chatbot with optional sentiment backend and model-separated analytics.
 
-Sentiment analysis is lexicon-based NLP, not depression prediction.
+Sentiment indicates textual polarity, never depression or psychological status.
 """
 import logging
 from functools import lru_cache
+from typing import Literal
 import os
 import re
 import sqlite3
@@ -16,8 +17,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
-from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 from rag import retrieve_resources, reference_context
+from sentiment_engine import score_sentiment, configured_sentiment_backend
 
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
@@ -27,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
-analyzer = SentimentIntensityAnalyzer()
 
 
 def init_db():
@@ -40,14 +40,27 @@ def init_db():
                 message TEXT,
                 reply TEXT,
                 sentiment_score REAL,
+                sentiment_model TEXT,
+                sentiment_label TEXT,
                 model_used TEXT,
                 timestamp TEXT DEFAULT CURRENT_TIMESTAMP
             )
         """)
         columns = {column[1] for column in conn.execute("PRAGMA table_info(messages)")}
-        for name, type_ in (("sentiment_score", "REAL"), ("model_used", "TEXT")):
+        for name, type_ in (
+            ("sentiment_score", "REAL"),
+            ("sentiment_model", "TEXT"),
+            ("sentiment_label", "TEXT"),
+            ("model_used", "TEXT"),
+        ):
             if name not in columns:
                 conn.execute(f"ALTER TABLE messages ADD COLUMN {name} {type_}")
+        # Existing non-null sentiment scores came exclusively from VADER.
+        # Preserve legacy depression_score without reinterpretation.
+        conn.execute("""
+            UPDATE messages SET sentiment_model = 'vader'
+            WHERE sentiment_model IS NULL AND sentiment_score IS NOT NULL
+        """)
 
 
 init_db()
@@ -226,8 +239,10 @@ async def chat(chat_request: ChatRequest):
     if not message:
         raise HTTPException(status_code=422, detail="Message cannot be blank")
 
-    # Compound sentiment is in [-1, 1]. It is NOT a depression score.
-    sentiment_score = analyzer.polarity_scores(message)["compound"]
+    # CPU-heavy transformer inference runs off the FastAPI event loop.
+    # If RoBERTa is unavailable, the fallback is explicitly labeled VADER.
+    sentiment = await run_in_threadpool(score_sentiment, message)
+    sentiment_score = sentiment["sentiment_score"]
     previous_turns = recent_chat_context(chat_request.user_id)
     is_crisis = check_crisis_message(message)
     references = [] if is_crisis else retrieve_resources(message)
@@ -236,15 +251,19 @@ async def chat(chat_request: ChatRequest):
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute("""
             INSERT INTO messages
-            (user_id, message, reply, sentiment_score, model_used, timestamp)
-            VALUES (?, ?, ?, ?, ?, ?)
+            (user_id, message, reply, sentiment_score, sentiment_model, sentiment_label, model_used, timestamp)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         """, (
-            chat_request.user_id, message, reply, sentiment_score, model_used,
+            chat_request.user_id, message, reply, sentiment_score,
+            sentiment["sentiment_model"], sentiment["sentiment_label"], model_used,
             datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
         ))
     return {
         "reply": reply,
         "sentiment_score": sentiment_score,
+        "sentiment_model": sentiment["sentiment_model"],
+        "sentiment_label": sentiment["sentiment_label"],
+        "sentiment_probabilities": sentiment["sentiment_probabilities"],
         "model_used": model_used,
         "rag_info": {
             "retrieved_count": len(references),
@@ -345,8 +364,13 @@ async def rag_compare(request: RetrievalPreviewRequest):
 
 
 @app.get("/admin/stats")
-def admin_stats():
-    """Hourly average sentiment and active users from the last 24 hours."""
+def admin_stats(sentiment_model: Literal["vader", "roberta"] | None = None):
+    """24h response metrics and model-SEPARATED text sentiment trends.
+
+    The optional query selector never averages VADER with RoBERTa.
+    Counts of users/messages/response engines include ALL messages.
+    """
+    selected = sentiment_model or configured_sentiment_backend()
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
@@ -356,19 +380,24 @@ def admin_stats():
             FROM messages
             WHERE datetime(timestamp) >= datetime(?)
               AND sentiment_score IS NOT NULL
+              AND COALESCE(sentiment_model, 'vader') = ?
             GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
             ORDER BY strftime('%Y-%m-%d %H:00', timestamp)
-        """, (since,)).fetchall()
+        """, (since, selected)).fetchall()
         active_users = conn.execute("""
             SELECT COUNT(DISTINCT user_id) FROM messages
             WHERE datetime(timestamp) >= datetime(?)
         """, (since,)).fetchone()[0]
-        # Preserve the original sentiment-trend response contract.
-        # Extra metrics power the separate dashboard, using the same 24h window.
-        message_count, average_sentiment = conn.execute("""
+        message_count = conn.execute("""
+            SELECT COUNT(*) FROM messages
+            WHERE datetime(timestamp) >= datetime(?)
+        """, (since,)).fetchone()[0]
+        sentiment_message_count, average_sentiment = conn.execute("""
             SELECT COUNT(*), AVG(sentiment_score) FROM messages
             WHERE datetime(timestamp) >= datetime(?)
-        """, (since,)).fetchone()
+              AND sentiment_score IS NOT NULL
+              AND COALESCE(sentiment_model, 'vader') = ?
+        """, (since, selected)).fetchone()
         model_usage = dict(conn.execute("""
             SELECT COALESCE(model_used, 'unknown'), COUNT(*) FROM messages
             WHERE datetime(timestamp) >= datetime(?)
@@ -377,6 +406,9 @@ def admin_stats():
     return {
         "total_active_users": active_users,
         "message_count": message_count,
+        "sentiment_message_count": sentiment_message_count,
+        "sentiment_model": selected,
+        "configured_sentiment_model": configured_sentiment_backend(),
         "average_sentiment": round(average_sentiment, 3) if average_sentiment is not None else None,
         "model_usage": model_usage,
         "sentiment_trend": {
