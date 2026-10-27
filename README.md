@@ -1,4 +1,4 @@
-# MindSpace | Student mental health support chatbot
+# MindSpace | Mental health support chatbot
 
 FastAPI + JavaScript + Gemini API + TF-IDF retrieval (RAG) + SQLite/Chart.js,
 with an optional local DialoGPT response fallback and optional RoBERTa
@@ -23,9 +23,6 @@ therapy, a depression diagnosis or validated crisis-risk assessment.
 ## Run in VS Code (Windows)
 
 ```powershell
-git fetch origin
-git switch feature/grounded-rag-support-2026
-git pull --ff-only
 # If the virtual environment already exists, activate it instead:
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
@@ -36,7 +33,7 @@ python main2.py
 ```
 
 Set `GEMINI_API_KEY` in your local `.env`, and confirm your accessible
-`GEMINI_MODEL`. Never commit your key. Visit
+`GEMINI_MODEL`.  Visit
 http://127.0.0.1:8000/ for chat, http://127.0.0.1:8000/admin for analytics.
 
 The admin page and stats API are **not password protected**. SQLite stores
@@ -56,7 +53,7 @@ In your local `.env` file, set:
 SENTIMENT_BACKEND=roberta
 ```
 
-Restart `python main2.py`. RoBERTa runs locally on CPU with pretrained
+Start `python main2.py`. RoBERTa runs locally on CPU with pretrained
 `cardiffnlp/twitter-roberta-base-sentiment-latest`. No model training,
 GPU or paid API is required for sentiment inference. The first request
 downloads/loads weights (~500 MB download), and CPU inference may be slow,
@@ -110,18 +107,6 @@ The API defaults to the model configured in `.env` or you can select
 `GET /admin/stats?sentiment_model=roberta`. The additional
 `sentiment_message_count` indicates how many message scores contributed.
 
-## What was evaluated, and what it means
-
-```powershell
-# Original binary VADER vs DistilBERT (20 illustrative authored examples):
-python evaluate_sentiment.py --transformer
-
-# Balanced official TweetEval test split, 90 messages:
-python evaluate_sentiment_threeclass.py --dataset tweet_eval --models all --limit 90
-
-# Authored student-chat stress tests, 36 examples:
-python evaluate_sentiment_threeclass.py --dataset challenges --models all
-```
 
 User-reported results:
 
@@ -165,18 +150,3 @@ real pretrained model weights are not needed for unit tests. Verify
 a real chat request, dashboard model selector and actual cached model
 on your local Windows laptop before demoing to interviewers.
 
-## Repository cleanup
-
-Removed from the working feature branch: unused
-`merged_nrc_lexicon.json`, unused `mentalchat.json` experimental
-dataset, the bundled `get-pip.py` installer, and a machine-specific
-`.vscode/settings.json`. Production files, optional experiments, tests,
-`knowledge/resources.json`, and all required dependency manifests remain.
-
-Git history is retained. The `main` branch is **not modified**.
-
-**Accurate interview wording:** "I implemented Gemini-powered chat
-responses and local document retrieval, evaluated pretrained DistilBERT
-and RoBERTa sentiment classifiers against VADER, and optionally use
-RoBERTa probabilities to calculate a [-1,+1] text-polarity score.
-I did not train or fine-tune the transformer."
