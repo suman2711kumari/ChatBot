@@ -5,5 +5,9 @@ __pycache__/
 *.pyc
 chatbot.db
 chatbot.db-*
+# Generated MiniLM embeddings, FAISS index and chunk metadata
+knowledge/vector_store/
+# Incomplete document downloads
+knowledge/documents/*.part
 # Downloaded public benchmark data for local evaluation
 evaluation/cache/

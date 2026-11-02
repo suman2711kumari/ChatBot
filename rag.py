@@ -1,87 +1,130 @@
-"""Small, transparent RAG retriever over reviewed public self-help summaries.
+"""MiniLM + FAISS retrieval over locally stored source-document chunks.
 
-Default: CPU-friendly TF-IDF retrieval; no dataset, GPU or model download.
-Optional: MiniLM sentence embeddings, loaded only with RAG_BACKEND=semantic.
-Retrieval results are reading suggestions, NOT clinical evidence or diagnosis.
+Documents are loaded and indexed by ingest_documents.py. This module only
+loads the persisted index, embeds a user query, and returns relevant chunks.
+Retrieved material is supportive background, not medical advice or diagnosis.
 """
+from __future__ import annotations
+
 import json
 import logging
 import os
 from functools import lru_cache
 from pathlib import Path
 
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-
 LOGGER = logging.getLogger(__name__)
-DATA_FILE = Path(__file__).resolve().parent / "knowledge" / "resources.json"
+BASE_DIR = Path(__file__).resolve().parent
+VECTOR_STORE_DIR = BASE_DIR / "knowledge" / "vector_store"
+INDEX_FILE = VECTOR_STORE_DIR / "index.faiss"
+CHUNKS_FILE = VECTOR_STORE_DIR / "chunks.json"
+DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+
+
+def is_index_ready() -> bool:
+    """Return whether both the FAISS index and its chunk metadata are present."""
+    return INDEX_FILE.is_file() and CHUNKS_FILE.is_file()
 
 
 @lru_cache(maxsize=1)
-def _index():
-    resources = json.loads(DATA_FILE.read_text(encoding="utf-8"))
-    for item in resources:
-        if not item["url"].startswith("https://"):
-            raise ValueError("Only HTTPS knowledge-base links are allowed")
-    documents = [
-        " ".join([
-            item["title"], item["topic"],
-            " ".join(item["keywords"]) * 2,
-            item["summary"],
-        ])
-        for item in resources
-    ]
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2))
-    vectors = vectorizer.fit_transform(documents)
-    return resources, documents, vectorizer, vectors
+def _load_assets():
+    """Load the local FAISS index, chunk metadata and CPU MiniLM model once."""
+    if not is_index_ready():
+        raise FileNotFoundError(
+            "RAG index is missing. Run 'python ingest_documents.py' first."
+        )
 
-
-@lru_cache(maxsize=1)
-def _semantic_model():
-    # Optional model (~90 MB download plus libraries). CPU is sufficient.
+    import faiss
     from sentence_transformers import SentenceTransformer
-    return SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", device="cpu")
+
+    chunks = json.loads(CHUNKS_FILE.read_text(encoding="utf-8"))
+    index = faiss.read_index(str(INDEX_FILE))
+    if index.ntotal != len(chunks):
+        raise ValueError(
+            f"FAISS index contains {index.ntotal} vectors but "
+            f"{len(chunks)} chunk records were found."
+        )
+
+    model_name = os.getenv("RAG_EMBEDDING_MODEL", DEFAULT_MODEL).strip()
+    model = SentenceTransformer(model_name, device="cpu")
+    return model, index, chunks
 
 
-@lru_cache(maxsize=1)
-def _semantic_vectors():
-    _, documents, _, _ = _index()
-    return _semantic_model().encode(documents, normalize_embeddings=True)
+def retrieve_chunks(query: str, limit: int = 3) -> list[dict]:
+    """Retrieve the highest-scoring source chunks using MiniLM and FAISS.
 
-
-def retrieve_resources(query: str, limit: int = 2) -> list[dict]:
-    """Return related reading only when similarity clears the threshold."""
-    if not query or not query.strip():
+    MiniLM embeddings are normalized during indexing and query encoding.
+    FAISS IndexFlatIP therefore returns cosine similarity via inner product.
+    """
+    if not query or not query.strip() or limit <= 0:
         return []
-    resources, _, vectorizer, vectors = _index()
-    method = "tfidf"
-    if os.getenv("RAG_BACKEND", "tfidf").strip().lower() == "semantic":
-        try:
-            model = _semantic_model()
-            query_vector = model.encode([query], normalize_embeddings=True)
-            scores = cosine_similarity(query_vector, _semantic_vectors())[0]
-            threshold = 0.35
-            method = "semantic"
-        except Exception:
-            LOGGER.warning("Semantic RAG unavailable; using TF-IDF", exc_info=True)
-            scores = cosine_similarity(vectorizer.transform([query]), vectors)[0]
-            threshold = 0.13
-    else:
-        scores = cosine_similarity(vectorizer.transform([query]), vectors)[0]
-        threshold = 0.13
 
-    ranked = sorted(enumerate(scores), key=lambda pair: pair[1], reverse=True)
-    return [
-        dict(resources[index], similarity=round(float(score), 3), retrieval_method=method)
-        for index, score in ranked if float(score) >= threshold
-    ][:max(0, min(limit, 3))]
+    try:
+        import numpy as np
+
+        model, index, chunks = _load_assets()
+        if index.ntotal == 0:
+            return []
+
+        query_vector = model.encode(
+            [query.strip()],
+            normalize_embeddings=True,
+            convert_to_numpy=True,
+        )
+        query_vector = np.ascontiguousarray(query_vector, dtype=np.float32)
+        scores, indices = index.search(query_vector, min(limit, index.ntotal))
+    except FileNotFoundError as exc:
+        LOGGER.warning("%s", exc)
+        return []
+    except ImportError:
+        LOGGER.warning(
+            "RAG dependencies are missing. Install requirements-rag-embeddings.txt."
+        )
+        return []
+    except Exception:
+        LOGGER.exception("Document retrieval failed; continuing without RAG context.")
+        return []
+
+    try:
+        threshold = float(os.getenv("RAG_MIN_SIMILARITY", "0.30"))
+    except ValueError:
+        threshold = 0.30
+
+    results = []
+    for score, chunk_position in zip(scores[0], indices[0]):
+        if chunk_position < 0 or float(score) < threshold:
+            continue
+        stored = chunks[int(chunk_position)]
+        metadata = stored.get("metadata", {})
+        results.append({
+            "title": metadata.get("title") or metadata.get("source_file", "Source document"),
+            "url": metadata.get("url") or "",
+            "source_file": metadata.get("source_file") or "",
+            "publisher": metadata.get("publisher") or "",
+            "file_type": metadata.get("file_type") or "",
+            "page": metadata.get("page"),
+            "chunk_index": metadata.get("chunk_index"),
+            "chunk_text": stored.get("page_content", ""),
+            "similarity": round(float(score), 3),
+            "retrieval_method": "minilm_faiss",
+        })
+    return results
 
 
-def reference_context(resources: list[dict]) -> str:
-    """Treat summaries as reference data, not as instructions to the model."""
-    if not resources:
-        return "No relevant reference notes were found for this message."
-    return "\n".join(
-        f"[{i}] {item['title']} ({item['url']}): {item['summary']}"
-        for i, item in enumerate(resources, start=1)
-    )
+def reference_context(chunks: list[dict]) -> str:
+    """Format retrieved source chunks as reference data, never as instructions."""
+    if not chunks:
+        return "No relevant source-document chunks were retrieved."
+
+    formatted = []
+    for index, item in enumerate(chunks, start=1):
+        location = f", page {item['page']}" if item.get("page") else ""
+        source = f"Source: {item['url']}" if item.get("url") else (
+            f"Local file: {item.get('source_file', 'uploaded document')}"
+        )
+        text = (item.get("chunk_text") or "").strip()[:1600]
+        formatted.append(
+            f"[{index}] {item.get('title', 'Source document')}{location}\n"
+            f"{source}\n"
+            f"Passage:\n{text}"
+        )
+    return "\n\n".join(formatted)

@@ -17,7 +17,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
-from rag import retrieve_resources, reference_context
+from rag import retrieve_chunks, reference_context, is_index_ready
 from sentiment_engine import score_sentiment, configured_sentiment_backend
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -188,7 +188,8 @@ async def generate_reply(message, previous_turns, references=None):
     if check_crisis_message(message):
         return CRISIS_REPLY, "safety_message"
 
-    references = references if references is not None else retrieve_resources(message)
+    if references is None:
+        references = await run_in_threadpool(retrieve_chunks, message)
     api_key = os.getenv("GEMINI_API_KEY")
     if api_key:
         try:
@@ -245,7 +246,7 @@ async def chat(chat_request: ChatRequest):
     sentiment_score = sentiment["sentiment_score"]
     previous_turns = recent_chat_context(chat_request.user_id)
     is_crisis = check_crisis_message(message)
-    references = [] if is_crisis else retrieve_resources(message)
+    references = [] if is_crisis else await run_in_threadpool(retrieve_chunks, message)
     reply, model_used = await generate_reply(message, previous_turns, references)
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -267,12 +268,13 @@ async def chat(chat_request: ChatRequest):
         "model_used": model_used,
         "rag_info": {
             "retrieved_count": len(references),
-            # Notes submitted to Gemini; it does not prove the model relied on them.
+            "index_ready": is_index_ready(),
+            # Chunks submitted to Gemini; it does not prove the model relied on them.
             "context_attached_to_gemini": model_used == "gemini" and bool(references),
             "retrieval_method": references[0]["retrieval_method"] if references else None,
         },
-        "references": [{"title": x["title"], "url": x["url"]} for x in references] if model_used == "gemini" else [],
-        "suggested_reading": [{"title": x["title"], "url": x["url"]} for x in references] if model_used not in ("gemini", "safety_message") else [],
+        "references": [{"title": x["title"], "url": x.get("url", ""), "source_file": x.get("source_file", ""), "page": x.get("page")} for x in references] if model_used == "gemini" else [],
+        "suggested_reading": [{"title": x["title"], "url": x.get("url", ""), "source_file": x.get("source_file", ""), "page": x.get("page")} for x in references] if model_used not in ("gemini", "safety_message") else [],
     }
 
 
@@ -287,11 +289,15 @@ def rag_preview(request: RetrievalPreviewRequest):
         raise HTTPException(status_code=422, detail="A test query is required")
     if check_crisis_message(query):
         raise HTTPException(status_code=400, detail="Do not use the RAG demo for emergencies")
-    matches = retrieve_resources(query, limit=3)
+    if not is_index_ready():
+        raise HTTPException(status_code=503, detail="RAG index is missing. Run python ingest_documents.py first.")
+    matches = retrieve_chunks(query, limit=3)
     return {
         "matches": [{
-            "title": item["title"], "topic": item["topic"],
-            "summary": item["summary"], "url": item["url"],
+            "title": item["title"], "source_file": item["source_file"],
+            "publisher": item["publisher"], "file_type": item["file_type"],
+            "page": item["page"], "chunk_index": item["chunk_index"],
+            "chunk_text": item["chunk_text"], "url": item["url"],
             "similarity": item["similarity"],
             "retrieval_method": item["retrieval_method"],
         } for item in matches],
@@ -341,7 +347,9 @@ async def rag_compare(request: RetrievalPreviewRequest):
         raise HTTPException(status_code=422, detail="A test query is required")
     if check_crisis_message(query):
         raise HTTPException(status_code=400, detail="Do not use the RAG demo for emergencies")
-    matches = retrieve_resources(query, limit=2)
+    if not is_index_ready():
+        raise HTTPException(status_code=503, detail="RAG index is missing. Run python ingest_documents.py first.")
+    matches = await run_in_threadpool(retrieve_chunks, query, 2)
     if not matches:
         raise HTTPException(status_code=422, detail="No relevant resources found for comparison")
     if not os.getenv("GEMINI_API_KEY"):

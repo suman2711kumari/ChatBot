@@ -1,6 +1,6 @@
 # MindSpace | Student mental health support chatbot
 
-FastAPI + JavaScript + Gemini API + TF-IDF retrieval (RAG) + SQLite/Chart.js,
+FastAPI + JavaScript + Gemini API + document-based RAG (MiniLM + FAISS) + SQLite/Chart.js,
 with an optional local DialoGPT response fallback and optional RoBERTa
 sentiment inference. This is a **non-clinical student demonstration**, not
 therapy, a depression diagnosis or validated crisis-risk assessment.
@@ -9,11 +9,11 @@ therapy, a depression diagnosis or validated crisis-risk assessment.
 
 - **Generation:** Gemini API (subject to provider's pricing, quota and privacy
   terms), or optional local pretrained DialoGPT-small when Gemini fails.
-- **Retrieval:** TF-IDF/cosine similarity over seven concise, curated public
-  WHO/NHS/NIMH summaries in `knowledge/resources.json`, optionally
-  sentence-embedding retrieval (`requirements-rag-embeddings.txt`,
-  `RAG_BACKEND=semantic`). Retrieved notes are attached as optional Gemini
-  context; the API has `rag_info` diagnostics and a separate admin RAG Inspector.
+- **Retrieval:** Original WHO PDF and NIMH webpage sources are downloaded into
+  `knowledge/documents/`, parsed, split into overlapping chunks with LangChain's
+  `RecursiveCharacterTextSplitter`, embedded with `all-MiniLM-L6-v2`, and indexed
+  in a local FAISS vector store. Relevant chunks are attached as optional Gemini
+  context; the API exposes `rag_info` diagnostics and an admin RAG Inspector.
 - **Sentiment:** VADER's compound lexicon score by default. Optional
   three-class RoBERTa with a separately defined polarity score. These do **not**
   measure mental health, depression, distress or user satisfaction.
@@ -24,11 +24,15 @@ therapy, a depression diagnosis or validated crisis-risk assessment.
 
 ```powershell
 git fetch origin
-git switch feature/grounded-rag-support-2026
+git switch feature/document-chunk-rag
 git pull --ff-only
 # If the virtual environment already exists, activate it instead:
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
+# Install parsing, chunking, MiniLM and FAISS dependencies:
+python -m pip install -r requirements-rag-embeddings.txt
+# Download source documents, parse, chunk, embed and build the index:
+python ingest_documents.py
 # Only for optional local DialoGPT fallback:
 python -m pip install -r requirements-local.txt
 # First-time setup only: Copy-Item .env.example .env
@@ -44,7 +48,46 @@ chat messages as plaintext, and Gemini receives messages when enabled.
 **Use fictional data locally**. Do not deploy for real patient use or collect
 private conversations without consent/security/access controls.
 
+
+## Document-based RAG pipeline
+
+The implementation follows the two-stage pattern: document ingestion first, then query-time retrieval and generation.
+
+### Build the local knowledge base
+
+```powershell
+python -m pip install -r requirements-rag-embeddings.txt
+python ingest_documents.py
+```
+
+The ingestion script downloads the seed sources listed in `knowledge/sources.json` into `knowledge/documents/`. It also accepts your own PDF, HTML, TXT and Markdown files placed in that folder.
+
+```powershell
+# Rebuild using only files already in the documents folder:
+python ingest_documents.py --local-only
+
+# Re-download the seed files and rebuild:
+python ingest_documents.py --force-download
+```
+
+### What ingestion does
+
+- **Loading and parsing:** PyMuPDF extracts PDF text page by page. BeautifulSoup extracts main HTML content and removes navigation, scripts and other non-content elements. TXT and Markdown files are read directly.
+- **Document structure:** Each page/document becomes a LangChain `Document` with text and metadata such as title, publisher, source filename, URL and page number.
+- **Chunking:** `RecursiveCharacterTextSplitter` uses a 1,000-character chunk size and 200-character overlap while preserving metadata.
+- **Embeddings:** `sentence-transformers/all-MiniLM-L6-v2` creates a dense vector for each chunk and runs on CPU.
+- **Vector storage:** FAISS `IndexFlatIP` persists normalized vectors in `knowledge/vector_store/index.faiss`. Because vectors are normalized, inner product is equivalent to cosine similarity. Text and source metadata are stored separately in `chunks.json`.
+
+The generated vector store is ignored by Git because it can be rebuilt from the source documents. Keep document copies only when their reuse terms permit it. WHO's guide has a non-commercial Creative Commons licence; NIMH's text is public domain unless otherwise indicated. Cite both publishers and do not imply endorsement.
+
+### Query-time retrieval
+
+`rag.py` embeds the user query with the same MiniLM model, searches FAISS, applies `RAG_MIN_SIMILARITY` (default `0.30`) and returns up to three source chunks. `main2.py` attaches retrieved passages to Gemini's prompt. Crisis-message handling runs before retrieval. The optional DialoGPT fallback does not receive retrieved context and is not described as grounded.
+
+The admin RAG Inspector previews actual chunk text, source metadata and similarity scores without calling Gemini or logging a conversation. Its optional ON/OFF comparison makes two Gemini API requests.
+
 ## How to enable OPTIONAL RoBERTa sentiment
+
 
 ```powershell
 python -m pip install -r requirements-sentiment-experiment.txt
@@ -143,8 +186,8 @@ reliability or overall real-world performance.
 ## RAG Inspector
 
 The independent `/admin` page includes a RAG Inspector that previews
-retrieved source summaries and similarity scores without a Gemini call
-or conversation logging. The optional RAG ON/OFF comparison performs
+retrieved source-document chunks, metadata and similarity scores without a
+Gemini call or conversation logging. The optional RAG ON/OFF comparison performs
 **two Gemini API requests** when explicitly clicked, so it can consume
 free API quota; only use fictional prompts. This does not prove one
 answer is more correct than the other. No reference links are appended
@@ -171,12 +214,14 @@ Removed from the working feature branch: unused
 `merged_nrc_lexicon.json`, unused `mentalchat.json` experimental
 dataset, the bundled `get-pip.py` installer, and a machine-specific
 `.vscode/settings.json`. Production files, optional experiments, tests,
-`knowledge/resources.json`, and all required dependency manifests remain.
+`knowledge/sources.json`, the ingestion script and all required dependency manifests remain.
 
 Git history is retained. The `main` branch is **not modified**.
 
-**Accurate interview wording:** "I implemented Gemini-powered chat
-responses and local document retrieval, evaluated pretrained DistilBERT
-and RoBERTa sentiment classifiers against VADER, and optionally use
-RoBERTa probabilities to calculate a [-1,+1] text-polarity score.
-I did not train or fine-tune the transformer."
+**Accurate interview wording:** "I implemented a document-based RAG
+pipeline that loads PDF and HTML sources, extracts text with PyMuPDF and
+BeautifulSoup, splits documents into overlapping chunks using LangChain,
+generates MiniLM embeddings, stores them in a local FAISS index and retrieves
+relevant passages for Gemini. I also implemented sentiment analysis with
+VADER and optional pretrained RoBERTa inference; I did not train or fine-tune
+the transformer."

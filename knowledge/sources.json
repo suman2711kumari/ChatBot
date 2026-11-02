@@ -1,0 +1,26 @@
+{
+  "sources": [
+    {
+      "file_name": "who_doing_what_matters_in_times_of_stress.pdf",
+      "title": "WHO: Doing What Matters in Times of Stress",
+      "publisher": "World Health Organization",
+      "format": "pdf",
+      "download_url": "https://iris.who.int/server/api/core/bitstreams/65bb7c04-5180-4773-a0d8-0d5be2cc35a0/content",
+      "source_url": "https://www.who.int/publications/i/item/9789240003927",
+      "license": "CC BY-NC-SA 3.0 IGO (non-commercial reuse with attribution)",
+      "license_url": "https://www.who.int/about/policies/publishing/copyright",
+      "attribution": "World Health Organization. Doing What Matters in Times of Stress: An Illustrated Guide. Geneva: WHO; 2020. Licence: CC BY-NC-SA 3.0 IGO."
+    },
+    {
+      "file_name": "nimh_caring_for_your_mental_health.html",
+      "title": "NIMH: Caring for Your Mental Health",
+      "publisher": "National Institute of Mental Health",
+      "format": "html",
+      "download_url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health",
+      "source_url": "https://www.nimh.nih.gov/health/topics/caring-for-your-mental-health",
+      "license": "Public domain unless otherwise indicated; cite NIMH",
+      "license_url": "https://www.nimh.nih.gov/index.php/site-info/policies",
+      "attribution": "Source: National Institute of Mental Health (NIMH), Caring for Your Mental Health."
+    }
+  ]
+}

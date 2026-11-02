@@ -27,7 +27,7 @@
     if (!matches.length) {
       const message = document.createElement("p");
       message.className = "usage-empty";
-      message.textContent = "Nothing matched. Try stress, studying, loneliness, sleep or breathing.";
+      message.textContent = "No relevant chunks found. Try exam stress, breathing, sleep or self-care.";
       results.appendChild(message);
       return;
     }
@@ -44,11 +44,11 @@
       heading.append(title, score);
       const caption = document.createElement("p");
       caption.className = "rag-subheading";
-      caption.textContent = "Topic: " + item.topic + " · Retriever: " + item.retrieval_method;
-      const summary = document.createElement("p");
-      summary.className = "rag-summary";
-      summary.textContent = item.summary;
-      card.append(heading, caption, summary);
+      caption.textContent = item.source_file + (item.page ? " · Page " + item.page : "") + " · Chunk " + item.chunk_index + " · " + item.retrieval_method;
+      const chunk = document.createElement("p");
+      chunk.className = "rag-summary";
+      chunk.textContent = item.chunk_text;
+      card.append(heading, caption, chunk);
       try {
         const url = new URL(item.url);
         if (url.protocol === "https:") {
@@ -78,7 +78,7 @@
       const data = await request("/admin/rag-preview", query);
       renderSources(data.matches || []);
       status.textContent = data.match_count +
-        " relevant passage(s) retrieved. Gemini was not called. This preview does not save conversations.";
+        " source chunk(s) retrieved. Gemini was not called. This preview does not save conversations.";
     } catch (err) {
       status.textContent = "Retrieval unavailable: " + err.message;
     } finally {
@@ -109,7 +109,7 @@
         compareResults.appendChild(card);
       });
       compareStatus.textContent = "Two Gemini calls completed with " +
-        data.retrieved_count + " retrieved notes. Similarity or difference is not an accuracy score.";
+        data.retrieved_count + " retrieved chunks. Similarity or difference is not an accuracy score.";
     } catch (err) {
       compareStatus.textContent = "Comparison unavailable: " + err.message;
     } finally {
