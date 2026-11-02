@@ -15,12 +15,17 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 BASE_DIR = Path(__file__).resolve().parent
+load_dotenv(BASE_DIR / ".env")
 KNOWLEDGE_DIR = BASE_DIR / "knowledge"
 DOCUMENT_DIR = KNOWLEDGE_DIR / "documents"
 SOURCES_FILE = KNOWLEDGE_DIR / "sources.json"
 VECTOR_STORE_DIR = KNOWLEDGE_DIR / "vector_store"
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL = os.getenv(
+    "RAG_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+).strip()
 SUPPORTED_EXTENSIONS = {".pdf", ".html", ".htm", ".txt", ".md"}
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -72,9 +77,13 @@ def download_seed_documents(force: bool = False) -> None:
                 if "html" not in content_type and not looks_like_html:
                     raise ValueError("The downloaded response does not look like HTML.")
 
-            target.write_bytes(content)
+            temporary_target = target.with_suffix(target.suffix + ".part")
+            temporary_target.write_bytes(content)
+            os.replace(temporary_target, target)
             LOGGER.info("Downloaded %s (%s bytes)", filename, len(content))
         except Exception as exc:
+            temporary_target = target.with_suffix(target.suffix + ".part")
+            temporary_target.unlink(missing_ok=True)
             LOGGER.warning("Could not download %s: %s", filename, exc)
 
 

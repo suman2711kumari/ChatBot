@@ -17,12 +17,13 @@ BASE_DIR = Path(__file__).resolve().parent
 VECTOR_STORE_DIR = BASE_DIR / "knowledge" / "vector_store"
 INDEX_FILE = VECTOR_STORE_DIR / "index.faiss"
 CHUNKS_FILE = VECTOR_STORE_DIR / "chunks.json"
+MANIFEST_FILE = VECTOR_STORE_DIR / "manifest.json"
 DEFAULT_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 
 def is_index_ready() -> bool:
     """Return whether both the FAISS index and its chunk metadata are present."""
-    return INDEX_FILE.is_file() and CHUNKS_FILE.is_file()
+    return INDEX_FILE.is_file() and CHUNKS_FILE.is_file() and MANIFEST_FILE.is_file()
 
 
 @lru_cache(maxsize=1)
@@ -37,6 +38,13 @@ def _load_assets():
     from sentence_transformers import SentenceTransformer
 
     chunks = json.loads(CHUNKS_FILE.read_text(encoding="utf-8"))
+    manifest = json.loads(MANIFEST_FILE.read_text(encoding="utf-8"))
+    model_name = os.getenv("RAG_EMBEDDING_MODEL", DEFAULT_MODEL).strip()
+    if manifest.get("embedding_model") != model_name:
+        raise ValueError(
+            "The saved index was built with a different embedding model. "
+            "Run python ingest_documents.py again after changing RAG_EMBEDDING_MODEL."
+        )
     index = faiss.read_index(str(INDEX_FILE))
     if index.ntotal != len(chunks):
         raise ValueError(
@@ -44,7 +52,6 @@ def _load_assets():
             f"{len(chunks)} chunk records were found."
         )
 
-    model_name = os.getenv("RAG_EMBEDDING_MODEL", DEFAULT_MODEL).strip()
     model = SentenceTransformer(model_name, device="cpu")
     return model, index, chunks
 
