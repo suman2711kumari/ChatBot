@@ -126,17 +126,23 @@ def get_local_dialogpt():
     return tokenizer, model
 
 
-def generate_local_reply(message, previous_turns):
-    """Pretrained DialoGPT inference; no fine-tuning or clinical guarantees."""
+def generate_local_reply(message, previous_turns, references=None):
+    """Pretrained DialoGPT inference with optional retrieved document context."""
     import torch
 
     tokenizer, model = get_local_dialogpt()
     eos = tokenizer.eos_token
+    # Keep the user's original query and add retrieved notes only when available.
+    current_turn = message
+    if references:
+        notes = reference_context(references)
+        if notes:
+            current_turn += f"\n\nRelevant information from knowledge documents:\n{notes}"
     # Build a little dialogue context from the last few stored turns.
     context = "".join(
         f"{user}{eos}{assistant}{eos}"
         for user, assistant in previous_turns
-    ) + f"{message}{eos}"
+    ) + f"{current_turn}{eos}"
     input_ids = tokenizer.encode(context, return_tensors="pt")[:, -600:]
     # Explicit attention mask is needed because DialoGPT uses EOS as its pad token.
     # The input is unpadded, so every provided token is part of the context.
@@ -156,8 +162,8 @@ def generate_local_reply(message, previous_turns):
     return tokenizer.decode(response_ids, skip_special_tokens=True).strip()
 
 
-async def local_fallback(message, previous_turns):
-    """Return an explicitly labelled offline response, or clear failure."""
+async def local_fallback(message, previous_turns, references=None):
+    """Use DialoGPT with retrieved notes when available, otherwise chat normally."""
     enabled = os.getenv("ENABLE_DIALOGPT_FALLBACK", "true").strip().lower()
     if enabled in ("false", "0", "no", "off"):
         return (
@@ -167,7 +173,7 @@ async def local_fallback(message, previous_turns):
     try:
         # Model inference can be slow on a laptop; don't block FastAPI's event loop.
         reply = await run_in_threadpool(
-            generate_local_reply, message, previous_turns
+            generate_local_reply, message, previous_turns, references
         )
         if reply:
             return reply, "dialogpt_fallback"
@@ -232,7 +238,7 @@ async def generate_reply(message, previous_turns, references=None):
     else:
         logger.info("No Gemini key found; using local fallback if available.")
 
-    return await local_fallback(message, previous_turns)
+    return await local_fallback(message, previous_turns, references)
 
 @app.post("/chat")
 async def chat(chat_request: ChatRequest):
